@@ -1,0 +1,35 @@
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<link rel="stylesheet" href="_card.css">
+<style>
+  body{display:flex;flex-direction:column;gap:13px}
+  .sw { flex:1; height: 84px; border-radius: var(--radius-md); display:flex;
+        flex-direction:column; justify-content:flex-end; padding:9px 12px; border:1px solid var(--border); }
+  .sw .name { font-size:12px; font-weight:600; }
+  .sw .hex { font-size:11px; }
+  .on-dark .name { color:#fff; } .on-dark .hex { color:rgba(255,255,255,.8); }
+  .on-light .name { color:var(--text-primary); } .on-light .hex { color:var(--text-secondary); }
+  .lead { display:flex; align-items:baseline; gap:12px; }
+  .preset{display:flex;flex-direction:column;align-items:center;gap:5px}
+  .dot{width:40px;height:40px;border-radius:50%}
+  .pn{font-size:11px;color:var(--text-secondary);font-weight:600}
+</style></head>
+<body>
+  <div class="lead"><span class="lbl" style="margin:0">Brand identity — HelaO2</span>
+    <span style="font-size:12px;color:var(--text-secondary)">ink navy · cream field</span></div>
+  <div class="row" style="flex-wrap:nowrap">
+    <div class="sw on-dark" style="background:var(--brand-navy)"><span class="name">Brand Navy</span><span class="hex mono">#0B1E40</span></div>
+    <div class="sw on-dark" style="background:var(--brand-navy-soft)"><span class="name">Navy Soft</span><span class="hex mono">#13294F</span></div>
+    <div class="sw on-light" style="background:var(--brand-cream)"><span class="name">Cream</span><span class="hex mono">#F7F9F4</span></div>
+    <div class="sw on-light" style="background:var(--brand-tint)"><span class="name">Navy Tint</span><span class="hex mono">#E7EBF2</span></div>
+  </div>
+  <div class="lead" style="margin-top:4px"><span class="lbl" style="margin:0">Action accent</span>
+    <span style="font-size:12px;color:var(--text-secondary)">default Navy · user-customizable in Settings (no orange)</span></div>
+  <div class="row" style="gap:18px">
+    <div class="preset"><span class="dot" style="background:linear-gradient(135deg,#1A3160,#0B1E40)"></span><span class="pn">Navy</span></div>
+    <div class="preset"><span class="dot" style="background:linear-gradient(135deg,#3B82F6,#1D4ED8)"></span><span class="pn">Blue</span></div>
+    <div class="preset"><span class="dot" style="background:linear-gradient(135deg,#334155,#1E293B)"></span><span class="pn">Black</span></div>
+    <div class="preset"><span class="dot" style="background:linear-gradient(135deg,#14B8A6,#0D9488)"></span><span class="pn">Teal</span></div>
+    <div class="preset"><span class="dot" style="background:linear-gradient(135deg,#6366F1,#4F46E5)"></span><span class="pn">Indigo</span></div>
+  </div>
+</body></html>

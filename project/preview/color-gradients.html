@@ -1,0 +1,20 @@
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<link rel="stylesheet" href="_card.css">
+<style>
+  .grad { height: 92px; border-radius: var(--radius-md); display:flex; flex-direction:column;
+          justify-content:flex-end; padding:12px 14px; flex:1; }
+  .grad .name { font-size:12px; font-weight:700; color:#fff; }
+  .grad .hex { font-size:10px; color:rgba(255,255,255,.9); }
+</style></head>
+<body>
+  <div class="row" style="flex-wrap:nowrap">
+    <div class="grad" style="background:var(--accent-gradient)">
+      <span class="name">Accent Gradient · 135°</span><span class="hex mono">#1A3160 → #0B1E40</span></div>
+    <div class="grad" style="background:var(--success-gradient)">
+      <span class="name">Success</span><span class="hex mono">#10B981 → #059669</span></div>
+    <div class="grad" style="background:var(--info-gradient)">
+      <span class="name">Info</span><span class="hex mono">#3B82F6 → #2563EB</span></div>
+  </div>
+  <p class="muted" style="font-size:11px;margin-top:10px">The accent gradient powers the dashboard header, hero tiles &amp; progress fills. It re-themes with the chosen accent color (navy default).</p>
+</body></html>

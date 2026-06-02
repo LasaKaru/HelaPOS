@@ -1,0 +1,45 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Import Colors -->
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="Colors.xaml"/>
+        <ResourceDictionary Source="ControlStyles.xaml"/>
+    </ResourceDictionary.MergedDictionaries>
+
+    <!-- Light Theme Brushes -->
+    <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource LightBackground}"/>
+    <SolidColorBrush x:Key="BackgroundSecondaryBrush" Color="{StaticResource LightBackgroundSecondary}"/>
+    <SolidColorBrush x:Key="BackgroundTertiaryBrush" Color="{StaticResource LightBackgroundTertiary}"/>
+    <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource LightSurface}"/>
+    <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource LightBorder}"/>
+    <SolidColorBrush x:Key="BorderHoverBrush" Color="{StaticResource LightBorderHover}"/>
+
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource LightTextPrimary}"/>
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource LightTextSecondary}"/>
+    <SolidColorBrush x:Key="TextTertiaryBrush" Color="{StaticResource LightTextTertiary}"/>
+    <SolidColorBrush x:Key="TextOnPrimaryBrush" Color="{StaticResource LightTextOnPrimary}"/>
+
+    <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource ClaudeOrange}"/>
+    <SolidColorBrush x:Key="PrimaryHoverBrush" Color="{StaticResource ClaudeOrangeHover}"/>
+    <SolidColorBrush x:Key="PrimaryLightBrush" Color="{StaticResource ClaudeOrangeLight}"/>
+
+    <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource Success}"/>
+    <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource Warning}"/>
+    <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource Error}"/>
+    <SolidColorBrush x:Key="InfoBrush" Color="{StaticResource Info}"/>
+
+    <!-- Shadows -->
+    <DropShadowEffect x:Key="CardShadow"
+                      BlurRadius="12"
+                      ShadowDepth="2"
+                      Opacity="0.1"
+                      Color="#000000"/>
+
+    <DropShadowEffect x:Key="CardShadowHover"
+                      BlurRadius="16"
+                      ShadowDepth="4"
+                      Opacity="0.15"
+                      Color="#000000"/>
+
+</ResourceDictionary>

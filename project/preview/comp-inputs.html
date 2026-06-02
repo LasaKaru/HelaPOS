@@ -1,0 +1,20 @@
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<link rel="stylesheet" href="_card.css">
+<style>
+  .field{display:flex;flex-direction:column;gap:8px;flex:1}
+  .field label{font-size:14px;font-weight:600}
+  .inp{font-family:var(--font-sans);font-size:14px;padding:10px 12px;border-radius:var(--radius-sm);
+    border:1px solid var(--border);background:var(--bg);color:var(--text-primary);outline:none}
+  .inp::placeholder{color:var(--text-tertiary)}
+  .inp.focus{border-color:var(--primary)}
+</style></head>
+<body>
+  <div class="row" style="flex-wrap:nowrap">
+    <div class="field"><label>Username</label>
+      <input class="inp" value="admin"></div>
+    <div class="field"><label>Password <span class="muted">(focused)</span></label>
+      <input class="inp focus" type="password" value="••••••••"></div>
+  </div>
+  <p class="muted" style="font-size:11px;margin-top:14px">Border turns Claude Orange on focus, grey on hover. 6px radius, 10×12 padding.</p>
+</body></html>

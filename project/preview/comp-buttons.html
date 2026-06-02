@@ -1,0 +1,20 @@
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<link rel="stylesheet" href="_card.css">
+<style>
+  .btn{font-family:var(--font-sans);font-size:14px;font-weight:600;border-radius:var(--radius-sm);
+    padding:12px 24px;cursor:pointer;border:1px solid transparent;transition:all var(--dur-fast) var(--ease-quick)}
+  .primary{background:var(--primary);color:#fff}
+  .primary:hover{background:var(--primary-hover)}
+  .secondary{background:var(--bg-secondary);color:var(--text-primary);border-color:var(--border)}
+  .secondary:hover{background:var(--bg-tertiary);border-color:var(--border-hover)}
+  .disabled{background:var(--primary);color:#fff;opacity:.5;cursor:not-allowed}
+</style></head>
+<body>
+  <div class="row" style="align-items:center">
+    <button class="btn primary">Add Payment</button>
+    <button class="btn secondary">Cancel</button>
+    <button class="btn disabled">Disabled</button>
+  </div>
+  <p class="muted" style="font-size:11px;margin-top:14px">Primary darkens on hover; both shrink to 0.98 on press. 6px radius, 12×24 padding, SemiBold.</p>
+</body></html>

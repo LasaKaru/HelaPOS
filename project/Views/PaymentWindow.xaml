@@ -1,0 +1,382 @@
+<Window x:Class="POS.Views.PaymentWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:converters="clr-namespace:POS.Converters"
+        Title="Payment"
+        Height="700"
+        Width="900"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        ResizeMode="NoResize">
+
+    <Window.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+        <converters:CurrencyConverter x:Key="CurrencyConverter"/>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="350"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Left: Payment Input -->
+        <Grid Grid.Column="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Border Grid.Row="0"
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,0,1"
+                    Padding="30,20">
+                <Grid>
+                    <StackPanel>
+                        <TextBlock Text="Process Payment"
+                                   FontSize="24"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+                        <TextBlock Text="Select payment method and enter details"
+                                   FontSize="14"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   Margin="0,4,0,0"/>
+                    </StackPanel>
+
+                    <!-- Amount Due Badge -->
+                    <Border Background="{DynamicResource PrimaryBrush}"
+                            CornerRadius="8"
+                            Padding="16,8"
+                            HorizontalAlignment="Right">
+                        <StackPanel>
+                            <TextBlock Text="Amount Due"
+                                       FontSize="11"
+                                       Foreground="White"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="{Binding AmountDue, Converter={StaticResource CurrencyConverter}}"
+                                       FontSize="28"
+                                       FontWeight="Bold"
+                                       Foreground="White"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- Payment Form -->
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="30,20">
+                    <!-- Payment Method Selection -->
+                    <TextBlock Text="Payment Method *"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               Margin="0,0,0,10"/>
+
+                    <ItemsControl ItemsSource="{Binding AvailablePaymentMethods}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Rows="1" Columns="4"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <RadioButton Content="{Binding}"
+                                            GroupName="PaymentMethod"
+                                            IsChecked="{Binding Path=DataContext.SelectedPaymentMethod, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource EnumToBoolConverter}, ConverterParameter={Binding}}"
+                                            Style="{StaticResource PaymentMethodRadioButton}"
+                                            Margin="0,0,10,0"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Cash Payment Section -->
+                    <Border Visibility="{Binding IsCashPayment, Converter={StaticResource BoolToVisibility}}"
+                            Style="{StaticResource Card}"
+                            Margin="0,20,0,0">
+                        <StackPanel>
+                            <TextBlock Text="💵 Cash Payment"
+                                       FontSize="18"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,0,0,20"/>
+
+                            <TextBlock Text="Cash Tendered *"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       Margin="0,0,0,8"/>
+                            <TextBox Style="{StaticResource ModernTextBox}"
+                                     Text="{Binding CashTendered, UpdateSourceTrigger=PropertyChanged}"
+                                     FontSize="20"
+                                     Padding="16"
+                                     Margin="0,0,0,20"/>
+
+                            <!-- Quick Cash Buttons -->
+                            <TextBlock Text="Quick Amount"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       Margin="0,0,0,10"/>
+                            <UniformGrid Rows="2" Columns="4">
+                                <Button Content="$5" Command="{Binding SetCashCommand}" CommandParameter="5" Style="{StaticResource SecondaryButton}" Margin="0,0,5,5"/>
+                                <Button Content="$10" Command="{Binding SetCashCommand}" CommandParameter="10" Style="{StaticResource SecondaryButton}" Margin="0,0,5,5"/>
+                                <Button Content="$20" Command="{Binding SetCashCommand}" CommandParameter="20" Style="{StaticResource SecondaryButton}" Margin="0,0,5,5"/>
+                                <Button Content="$50" Command="{Binding SetCashCommand}" CommandParameter="50" Style="{StaticResource SecondaryButton}" Margin="0,0,0,5"/>
+                                <Button Content="$100" Command="{Binding SetCashCommand}" CommandParameter="100" Style="{StaticResource SecondaryButton}" Margin="0,0,5,0"/>
+                                <Button Content="Exact" Command="{Binding SetExactCashCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,5,0" Grid.Column="1"/>
+                            </UniformGrid>
+
+                            <!-- Change Display -->
+                            <Border Background="{DynamicResource BackgroundSecondaryBrush}"
+                                    CornerRadius="8"
+                                    Padding="20"
+                                    Margin="0,20,0,0"
+                                    Visibility="{Binding ChangeAmount, Converter={StaticResource GreaterThanZeroToVisibilityConverter}}">
+                                <Grid>
+                                    <TextBlock Text="Change Due"
+                                               FontSize="14"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                    <TextBlock Text="{Binding ChangeAmount, Converter={StaticResource CurrencyConverter}}"
+                                               FontSize="32"
+                                               FontWeight="Bold"
+                                               Foreground="{DynamicResource SuccessBrush}"
+                                               HorizontalAlignment="Right"/>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Card Payment Section -->
+                    <Border Visibility="{Binding IsCardPayment, Converter={StaticResource BoolToVisibility}}"
+                            Style="{StaticResource Card}"
+                            Margin="0,20,0,0">
+                        <StackPanel>
+                            <TextBlock Text="💳 Card Payment"
+                                       FontSize="18"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,0,0,20"/>
+
+                            <TextBlock Text="Card Number *"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       Margin="0,0,0,8"/>
+                            <TextBox Style="{StaticResource ModernTextBox}"
+                                     Text="{Binding CardNumber, UpdateSourceTrigger=PropertyChanged}"
+                                     MaxLength="16"
+                                     Margin="0,0,0,15"/>
+
+                            <TextBlock Text="Cardholder Name *"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       Margin="0,0,0,8"/>
+                            <TextBox Style="{StaticResource ModernTextBox}"
+                                     Text="{Binding CardholderName}"
+                                     Margin="0,0,0,15"/>
+
+                            <Grid Margin="0,0,0,15">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="20"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Expiry (MM/YY) *"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"
+                                               Margin="0,0,0,8"/>
+                                    <TextBox Style="{StaticResource ModernTextBox}"
+                                             Text="{Binding CardExpiry}"
+                                             MaxLength="5"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="CVV *"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"
+                                               Margin="0,0,0,8"/>
+                                    <TextBox Style="{StaticResource ModernTextBox}"
+                                             Text="{Binding CardCVV}"
+                                             MaxLength="4"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <Border Background="{DynamicResource WarningBrush}"
+                                    CornerRadius="6"
+                                    Padding="12"
+                                    Opacity="0.1">
+                                <TextBlock Text="⚠️ Demo Mode: Card payments will be simulated"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"/>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Validation Error -->
+                    <Border Background="{DynamicResource ErrorBrush}"
+                            CornerRadius="6"
+                            Padding="12"
+                            Visibility="{Binding ValidationError, Converter={StaticResource BoolToVisibility}}"
+                            Margin="0,20,0,0">
+                        <TextBlock Text="{Binding ValidationError}"
+                                   Foreground="White"
+                                   TextWrapping="Wrap"/>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Add Payment Button -->
+            <Border Grid.Row="2"
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,1,0,0"
+                    Padding="30,15">
+                <Button Content="Add Payment"
+                        Style="{StaticResource PrimaryButton}"
+                        Command="{Binding AddPaymentCommand}"
+                        Height="48"
+                        FontSize="16"/>
+            </Border>
+        </Grid>
+
+        <!-- Right: Payment Summary -->
+        <Border Grid.Column="1"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1,0,0,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Summary Header -->
+                <Border Grid.Row="0"
+                        Background="{DynamicResource BackgroundSecondaryBrush}"
+                        Padding="20,15"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="0,0,0,1">
+                    <TextBlock Text="Payment Summary"
+                               FontSize="18"
+                               FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                </Border>
+
+                <!-- Payments List -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding Payments}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="{DynamicResource BorderBrush}"
+                                        BorderThickness="0,0,0,1"
+                                        Padding="20,15">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Row="0" Grid.Column="0">
+                                            <TextBlock Text="{Binding Method}"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                                            <TextBlock Text="{Binding ProcessedAt, StringFormat='HH:mm:ss'}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                                       Margin="0,2,0,0"/>
+                                        </StackPanel>
+
+                                        <TextBlock Grid.Row="0" Grid.Column="1"
+                                                   Text="{Binding Amount, Converter={StaticResource CurrencyConverter}}"
+                                                   FontSize="18"
+                                                   FontWeight="Bold"
+                                                   Foreground="{DynamicResource SuccessBrush}"
+                                                   VerticalAlignment="Center"/>
+
+                                        <Button Grid.Row="1"
+                                                Grid.ColumnSpan="2"
+                                                Content="Remove"
+                                                Style="{StaticResource SecondaryButton}"
+                                                Command="{Binding DataContext.RemovePaymentCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}"
+                                                Foreground="{DynamicResource ErrorBrush}"
+                                                HorizontalAlignment="Stretch"
+                                                Padding="8,6"
+                                                Margin="0,10,0,0"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- Totals -->
+                <Border Grid.Row="2"
+                        Background="{DynamicResource BackgroundSecondaryBrush}"
+                        Padding="20,15"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="0,1,0,1">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,8">
+                            <TextBlock Text="Total"
+                                       FontSize="14"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBlock Text="{Binding Total, Converter={StaticResource CurrencyConverter}}"
+                                       FontSize="14"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       HorizontalAlignment="Right"/>
+                        </Grid>
+                        <Grid Margin="0,0,0,8">
+                            <TextBlock Text="Amount Paid"
+                                       FontSize="14"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                            <TextBlock Text="{Binding AmountPaid, Converter={StaticResource CurrencyConverter}}"
+                                       FontSize="14"
+                                       Foreground="{DynamicResource SuccessBrush}"
+                                       HorizontalAlignment="Right"/>
+                        </Grid>
+                        <Separator Background="{DynamicResource BorderBrush}" Margin="0,8"/>
+                        <Grid Margin="0,8,0,0">
+                            <TextBlock Text="Balance"
+                                       FontSize="16"
+                                       FontWeight="Bold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+                            <TextBlock Text="{Binding AmountDue, Converter={StaticResource CurrencyConverter}}"
+                                       FontSize="20"
+                                       FontWeight="Bold"
+                                       Foreground="{DynamicResource PrimaryBrush}"
+                                       HorizontalAlignment="Right"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Action Buttons -->
+                <Grid Grid.Row="3" Padding="20">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="10"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Button Grid.Row="0"
+                            Content="Complete Transaction"
+                            Style="{StaticResource PrimaryButton}"
+                            Command="{Binding CompleteTransactionCommand}"
+                            IsEnabled="{Binding CanCompleteTransaction}"
+                            Height="48"
+                            FontSize="16"/>
+
+                    <Button Grid.Row="2"
+                            Content="Cancel"
+                            Style="{StaticResource SecondaryButton}"
+                            Command="{Binding CancelCommand}"
+                            Height="48"/>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

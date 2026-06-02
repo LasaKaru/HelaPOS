@@ -1,0 +1,25 @@
+<!DOCTYPE html><html data-theme="dark"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<link rel="stylesheet" href="_card.css">
+<style>
+  .sw { width: 104px; height: 84px; border-radius: var(--radius-md); display:flex;
+        flex-direction:column; justify-content:flex-end; padding:8px 10px; border:1px solid var(--border); }
+  .sw .name { font-size:11px; font-weight:600; color:var(--text-primary); }
+  .sw .hex { font-size:10px; color:var(--text-secondary); }
+  .txtrow { display:flex; gap:22px; margin-top:16px; align-items:baseline; }
+  .txtrow span { font-weight:600; }
+</style></head>
+<body>
+  <div class="row">
+    <div class="sw" style="background:var(--bg)"><span class="name">Background</span><span class="hex mono">#1F2937</span></div>
+    <div class="sw" style="background:var(--bg-secondary)"><span class="name">Secondary</span><span class="hex mono">#111827</span></div>
+    <div class="sw" style="background:var(--surface)"><span class="name">Surface</span><span class="hex mono">#374151</span></div>
+    <div class="sw" style="background:var(--bg);border-color:var(--border);border-width:2px"><span class="name">Border</span><span class="hex mono">#4B5563</span></div>
+    <div class="sw" style="background:var(--primary)"><span class="name" style="color:#fff">Accent (same)</span><span class="hex mono" style="color:#fff">#D97706</span></div>
+  </div>
+  <div class="txtrow">
+    <span style="color:var(--text-primary)">Primary · #F9FAFB</span>
+    <span style="color:var(--text-secondary)">Secondary · #D1D5DB</span>
+    <span style="color:var(--text-tertiary)">Tertiary · #9CA3AF</span>
+  </div>
+</body></html>

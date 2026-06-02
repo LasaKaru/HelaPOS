@@ -1,0 +1,345 @@
+<UserControl x:Class="POS.Views.SettingsHubView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="{DynamicResource BackgroundBrush}">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="30,20">
+            <Grid>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="⚙️"
+                               FontSize="28"
+                               VerticalAlignment="Center"
+                               Margin="0,0,10,0"/>
+                    <TextBlock Text="System Configuration"
+                               FontSize="24"
+                               FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimaryBrush}"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <Button Content="← Back to Dashboard"
+                        Style="{StaticResource SecondaryButton}"
+                        Command="{Binding BackCommand}"
+                        HorizontalAlignment="Right"
+                        Padding="16,10"/>
+            </Grid>
+        </Border>
+
+        <!-- Content -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="30,20">
+
+                <!-- System Settings Section -->
+                <TextBlock Text="System Settings"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"
+                           Margin="0,0,0,15"/>
+
+                <UniformGrid Rows="2" Columns="3" Margin="0,0,0,30">
+                    <!-- Store Configuration -->
+                    <Border Style="{StaticResource Card}" Margin="0,0,10,10" Cursor="Hand">
+                        <Border.InputBindings>
+                            <MouseBinding Command="{Binding NavigateToStoreSettingsCommand}" MouseAction="LeftClick"/>
+                        </Border.InputBindings>
+                        <StackPanel>
+                            <TextBlock Text="🏪" FontSize="32" Margin="0,0,0,10"/>
+                            <TextBlock Text="Store Information"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,0,0,5"/>
+                            <TextBlock Text="Configure store details, address, contact information"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Tax Configuration -->
+                    <Border Style="{StaticResource Card}" Margin="0,0,10,10" Cursor="Hand">
+                        <Border.InputBindings>
+                            <MouseBinding Command="{Binding NavigateToTaxRatesCommand}" MouseAction="LeftClick"/>
+                        </Border.InputBindings>
+                        <StackPanel>
+                            <TextBlock Text="💰" FontSize="32" Margin="0,0,0,10"/>
+                            <TextBlock Text="Tax Rates"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,0,0,5"/>
+                            <TextBlock Text="Manage tax rates, categories, and exemptions"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Receipt Settings -->
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,10" Cursor="Hand">
+                        <Border.InputBindings>
+                            <MouseBinding Command="{Binding NavigateToReceiptSettingsCommand}" MouseAction="LeftClick"/>
+                        </Border.InputBindings>
+                        <StackPanel>
+                            <TextBlock Text="🧾" FontSize="32" Margin="0,0,0,10"/>
+                            <TextBlock Text="Receipt Settings"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,0,0,5"/>
+                            <TextBlock Text="Customize receipt layout, logo, and messaging"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- User Preferences -->
+                    <Border Style="{StaticResource Card}" Margin="0,0,10,0" Cursor="Hand">
+                        <Border.InputBindings>
+                            <MouseBinding Command="{Binding NavigateToUserPreferencesCommand}" MouseAction="LeftClick"/>
+                        </Border.InputBindings>
+                        <StackPanel>
+                            <TextBlock Text="👤" FontSize="32" Margin="0,0,0,10"/>
+                            <TextBlock Text="User Preferences"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,0,0,5"/>
+                            <TextBlock Text="Theme, language, and personal settings"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Hardware Settings -->
+                    <Border Style="{StaticResource Card}" Margin="0,0,10,0" Cursor="Hand">
+                        <StackPanel>
+                            <TextBlock Text="🖨️" FontSize="32" Margin="0,0,0,10"/>
+                            <TextBlock Text="Hardware Setup"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,0,0,5"/>
+                            <TextBlock Text="Printers, scanners, cash drawer, card readers"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- System Info -->
+                    <Border Style="{StaticResource Card}" Cursor="Hand">
+                        <StackPanel>
+                            <TextBlock Text="ℹ️" FontSize="32" Margin="0,0,0,10"/>
+                            <TextBlock Text="System Information"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,0,0,5"/>
+                            <TextBlock Text="Version, database, backup, and diagnostics"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                </UniformGrid>
+
+                <!-- Business Operations Section -->
+                <TextBlock Text="Business Operations"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"
+                           Margin="0,10,0,15"/>
+
+                <UniformGrid Rows="2" Columns="3" Margin="0,0,0,30">
+                    <!-- Discounts & Promotions -->
+                    <Border Style="{StaticResource Card}" Margin="0,0,10,10" Cursor="Hand">
+                        <Border.InputBindings>
+                            <MouseBinding Command="{Binding NavigateToDiscountsCommand}" MouseAction="LeftClick"/>
+                        </Border.InputBindings>
+                        <StackPanel>
+                            <TextBlock Text="🎁" FontSize="32" Margin="0,0,0,10"/>
+                            <TextBlock Text="Discounts & Promotions"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,0,0,5"/>
+                            <TextBlock Text="Manage discounts, coupons, and promotional campaigns"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Returns & Refunds -->
+                    <Border Style="{StaticResource Card}" Margin="0,0,10,10" Cursor="Hand">
+                        <Border.InputBindings>
+                            <MouseBinding Command="{Binding NavigateToReturnsCommand}" MouseAction="LeftClick"/>
+                        </Border.InputBindings>
+                        <StackPanel>
+                            <TextBlock Text="↩️" FontSize="32" Margin="0,0,0,10"/>
+                            <TextBlock Text="Returns & Refunds"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,0,0,5"/>
+                            <TextBlock Text="Process returns, exchanges, and refund policies"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Suppliers -->
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,10" Cursor="Hand">
+                        <Border.InputBindings>
+                            <MouseBinding Command="{Binding NavigateToSuppliersCommand}" MouseAction="LeftClick"/>
+                        </Border.InputBindings>
+                        <StackPanel>
+                            <TextBlock Text="🚚" FontSize="32" Margin="0,0,0,10"/>
+                            <TextBlock Text="Suppliers"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,0,0,5"/>
+                            <TextBlock Text="Manage suppliers and purchase orders"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Cash Management -->
+                    <Border Style="{StaticResource Card}" Margin="0,0,10,0" Cursor="Hand">
+                        <Border.InputBindings>
+                            <MouseBinding Command="{Binding NavigateToCashManagementCommand}" MouseAction="LeftClick"/>
+                        </Border.InputBindings>
+                        <StackPanel>
+                            <TextBlock Text="💵" FontSize="32" Margin="0,0,0,10"/>
+                            <TextBlock Text="Cash Management"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,0,0,5"/>
+                            <TextBlock Text="Till reconciliation, cash drops, and banking"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Stock Adjustments -->
+                    <Border Style="{StaticResource Card}" Margin="0,0,10,0" Cursor="Hand">
+                        <Border.InputBindings>
+                            <MouseBinding Command="{Binding NavigateToStockAdjustmentsCommand}" MouseAction="LeftClick"/>
+                        </Border.InputBindings>
+                        <StackPanel>
+                            <TextBlock Text="📊" FontSize="32" Margin="0,0,0,10"/>
+                            <TextBlock Text="Stock Adjustments"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,0,0,5"/>
+                            <TextBlock Text="Adjust inventory for damage, loss, and corrections"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Audit Logs -->
+                    <Border Style="{StaticResource Card}" Cursor="Hand">
+                        <Border.InputBindings>
+                            <MouseBinding Command="{Binding NavigateToAuditLogsCommand}" MouseAction="LeftClick"/>
+                        </Border.InputBindings>
+                        <StackPanel>
+                            <TextBlock Text="📋" FontSize="32" Margin="0,0,0,10"/>
+                            <TextBlock Text="Audit Logs"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       Margin="0,0,0,5"/>
+                            <TextBlock Text="View system activity and change history"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                </UniformGrid>
+
+                <!-- Quick Stats -->
+                <Border Style="{StaticResource Card}" Background="{DynamicResource AccentBrush}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Margin="0,0,20,0">
+                            <TextBlock Text="System Version"
+                                       FontSize="11"
+                                       Foreground="White"
+                                       Opacity="0.9"
+                                       Margin="0,0,0,5"/>
+                            <TextBlock Text="v1.0.0-Beta"
+                                       FontSize="18"
+                                       FontWeight="Bold"
+                                       Foreground="White"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Margin="0,0,20,0">
+                            <TextBlock Text="Database"
+                                       FontSize="11"
+                                       Foreground="White"
+                                       Opacity="0.9"
+                                       Margin="0,0,0,5"/>
+                            <TextBlock Text="Microsoft Access"
+                                       FontSize="18"
+                                       FontWeight="Bold"
+                                       Foreground="White"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Margin="0,0,20,0">
+                            <TextBlock Text="Last Backup"
+                                       FontSize="11"
+                                       Foreground="White"
+                                       Opacity="0.9"
+                                       Margin="0,0,0,5"/>
+                            <TextBlock Text="Not Configured"
+                                       FontSize="18"
+                                       FontWeight="Bold"
+                                       Foreground="White"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="3">
+                            <TextBlock Text="License"
+                                       FontSize="11"
+                                       Foreground="White"
+                                       Opacity="0.9"
+                                       Margin="0,0,0,5"/>
+                            <TextBlock Text="Trial / Development"
+                                       FontSize="18"
+                                       FontWeight="Bold"
+                                       Foreground="White"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

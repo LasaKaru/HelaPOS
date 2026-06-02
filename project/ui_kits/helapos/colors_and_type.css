@@ -1,0 +1,178 @@
+/* ============================================================
+   HelaPOS (HelaO2) — Colors & Type Foundations
+   Source of truth: LasaKaru/POS  (WPF / .NET 9 — Styles/*.xaml)
+   "Claude-inspired" minimalist POS aesthetic.
+   ============================================================ */
+
+/* ---------- FONTS ----------
+   The desktop app uses the Windows system font "Segoe UI".
+   On the web we lead with Segoe UI and fall back to a humanist
+   sans stack. If you need a webfont substitute, "Source Sans 3"
+   is the closest free match (see README → font substitution note). */
+
+:root {
+  --font-sans: "Segoe UI", "Source Sans 3", system-ui, -apple-system,
+               "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Cascadia Code", "Consolas", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* ===========================================================
+     COLOR — BRAND IDENTITY  (HelaO2 logo)
+     The corporate brand mark is deep ink navy on a cream field.
+     Use navy for brand surfaces, headers, logo lockups & primary
+     brand identity; use Claude Orange (below) as the product's
+     interactive action accent.
+     =========================================================== */
+  --brand-navy:        #0B1E40;  /* HelaO2 ink navy — primary brand color */
+  --brand-navy-deep:   #061227;  /* darker navy — pressed / shadows       */
+  --brand-navy-soft:   #13294F;  /* lifted navy — hover on navy surfaces  */
+  --brand-cream:       #F7F9F4;  /* logo background field                  */
+  --brand-tint:        #E7EBF2;  /* pale navy wash — selected / fills      */
+  --brand-pulse:       #000000;  /* heartbeat glyph stroke                 */
+
+  /* ===========================================================
+     COLOR — ACTION ACCENT  (default: HelaO2 Navy)
+     The product's interactive accent: actions, CTAs, selected
+     states & KPI highlights. Defaults to the brand navy so the
+     UI matches the logo. End-users can re-theme this at runtime
+     from the Settings screen (see --accent presets below); every
+     component reads --primary / --accent-gradient, so overriding
+     those two on :root recolors the whole app.
+     =========================================================== */
+  --primary:            #0B1E40;  /* HelaO2 Navy — actions, accents     */
+  --primary-hover:      #16294F;  /* lifted navy — hover                */
+  --primary-pressed:    #061227;  /* deep navy — pressed                */
+  --primary-light:      #E7EBF2;  /* pale navy wash — selected / tints  */
+
+  /* Signature accent gradient (headers, hero stats, progress fill) */
+  --accent-gradient:        linear-gradient(135deg, #1A3160 0%, #0B1E40 100%);
+  --accent-gradient-light:  linear-gradient(135deg, #E7EBF2 0%, #CDD6E6 100%);
+
+  /* ---- Accent presets (Settings → Appearance). Each set overrides
+     --primary / --primary-hover / --primary-light / --accent-gradient. ---- */
+  /* Navy   #0B1E40  hover #16294F  grad #1A3160→#0B1E40   (default)  */
+  /* Blue   #1D4ED8  hover #1E40AF  grad #3B82F6→#1D4ED8              */
+  /* Black  #1E293B  hover #0F172A  grad #334155→#1E293B   (slate)    */
+  /* Teal   #0D9488  hover #0F766E  grad #14B8A6→#0D9488              */
+  /* Indigo #4F46E5  hover #4338CA  grad #6366F1→#4F46E5              */
+
+  /* Legacy amber (the original WPF "Claude Orange" — kept for reference,
+     not used by default; available as an accent preset if ever wanted) */
+  --legacy-orange:       #D97706;
+  --orange-gradient:     linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+
+  /* ===========================================================
+     COLOR — NEUTRALS · LIGHT THEME (default)
+     =========================================================== */
+  --bg:            #FFFFFF;  /* app background, inputs        */
+  --bg-secondary:  #F9FAFB;  /* subtle fills, hints, panels   */
+  --bg-tertiary:   #F3F4F6;  /* hovered secondary surfaces    */
+  --surface:       #FFFFFF;  /* cards                         */
+  --border:        #E5E7EB;  /* default 1px borders           */
+  --border-hover:  #D1D5DB;  /* hovered borders               */
+
+  /* Text */
+  --text-primary:    #111827;  /* headings, values            */
+  --text-secondary:  #6B7280;  /* labels, captions            */
+  --text-tertiary:   #9CA3AF;  /* placeholders, disabled      */
+  --text-on-primary: #FFFFFF;  /* text on orange / gradients  */
+
+  /* ===========================================================
+     COLOR — SEMANTIC (theme-agnostic)
+     =========================================================== */
+  --success: #10B981;  --success-dark: #059669;
+  --warning: #F59E0B;  --warning-dark: #D97706;
+  --error:   #EF4444;  --error-dark:   #DC2626;
+  --info:    #3B82F6;  --info-dark:    #2563EB;
+
+  --success-gradient: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  --info-gradient:    linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+  --danger-gradient:  linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+
+  /* ===========================================================
+     RADII  (from XAML CornerRadius values)
+     =========================================================== */
+  --radius-sm:   6px;   /* buttons, inputs                    */
+  --radius-md:   8px;   /* cards, icon buttons, badges-on-amt */
+  --radius-lg:   12px;  /* elevated/animated cards, tiles     */
+  --radius-pill: 16px;  /* pill toggles, status badges        */
+  --radius-full: 9999px;
+
+  /* ===========================================================
+     ELEVATION  (DropShadowEffect → CSS box-shadow)
+     =========================================================== */
+  --shadow-card:     0 2px 12px rgba(0,0,0,0.10);  /* resting card   */
+  --shadow-elevated: 0 4px 20px rgba(0,0,0,0.10);  /* stat/quick card*/
+  --shadow-hover:    0 4px 16px rgba(0,0,0,0.15);  /* card hover     */
+  --shadow-floating: 0 8px 24px rgba(0,0,0,0.16);  /* lifted hover   */
+
+  /* ===========================================================
+     MOTION
+     =========================================================== */
+  --ease-smooth: cubic-bezier(0.215, 0.61, 0.355, 1);   /* CubicEase EaseOut   */
+  --ease-quick:  cubic-bezier(0.25, 0.46, 0.45, 0.94);  /* QuadraticEase EaseOut */
+  --dur-fast:    0.15s;
+  --dur-medium:  0.30s;
+  --lift-hover:  -4px;   /* card translateY on hover */
+}
+
+/* ===========================================================
+   DARK THEME  — toggle via  <html data-theme="dark">  or  .theme-dark
+   Primary & semantics stay identical; neutrals invert.
+   =========================================================== */
+[data-theme="dark"], .theme-dark {
+  --bg:            #1F2937;
+  --bg-secondary:  #111827;
+  --bg-tertiary:   #0F172A;
+  --surface:       #374151;
+  --border:        #4B5563;
+  --border-hover:  #6B7280;
+
+  --text-primary:    #F9FAFB;
+  --text-secondary:  #D1D5DB;
+  --text-tertiary:   #9CA3AF;
+  --text-on-primary: #FFFFFF;
+
+  /* shadows read stronger on dark surfaces */
+  --shadow-card:     0 4px 16px rgba(0,0,0,0.30);
+  --shadow-elevated: 0 4px 20px rgba(0,0,0,0.30);
+  --shadow-hover:    0 6px 20px rgba(0,0,0,0.40);
+  --shadow-floating: 0 8px 24px rgba(0,0,0,0.45);
+}
+
+/* ============================================================
+   TYPE SCALE  (px values lifted verbatim from the XAML views)
+   The app is built at desktop density; sizes below are the
+   real ones used on Login / Dashboard / Payment screens.
+   ============================================================ */
+
+/* Base */
+body, .pos-body {
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+  background: var(--bg);
+  font-size: 14px;          /* default control text */
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Display — greeting header on the dashboard */
+.t-display   { font-size: 32px; font-weight: 700; line-height: 1.15; }
+/* Page / screen titles */
+.t-title     { font-size: 24px; font-weight: 700; line-height: 1.2;  }
+/* Section headings */
+.t-h2        { font-size: 22px; font-weight: 600; line-height: 1.25; }
+/* Big numeric stat values */
+.t-stat      { font-size: 28px; font-weight: 700; line-height: 1.1;  }
+/* Card titles */
+.t-h3        { font-size: 18px; font-weight: 600; line-height: 1.3;  }
+.t-h4        { font-size: 16px; font-weight: 600; line-height: 1.35; }
+/* Body / control text */
+.t-body      { font-size: 14px; font-weight: 400; }
+.t-label     { font-size: 14px; font-weight: 600; }   /* field labels */
+/* Captions / metadata */
+.t-caption   { font-size: 13px; font-weight: 400; color: var(--text-secondary); }
+.t-small     { font-size: 12px; font-weight: 400; color: var(--text-secondary); }
+.t-tiny      { font-size: 11px; font-weight: 600; }    /* badge text */
+
+/* Mono — receipts, SKUs, ids */
+.t-mono      { font-family: var(--font-mono); font-feature-settings: "tnum" 1; }

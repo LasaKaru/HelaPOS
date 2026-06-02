@@ -1,0 +1,106 @@
+<UserControl x:Class="POS.Views.LoginView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:POS.Converters"
+             Background="{DynamicResource BackgroundBrush}">
+
+    <UserControl.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+    </UserControl.Resources>
+
+    <Grid>
+        <!-- Background gradient for visual appeal -->
+        <Grid.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="{DynamicResource LightBackground}" Offset="0"/>
+                <GradientStop Color="{DynamicResource LightBackgroundSecondary}" Offset="1"/>
+            </LinearGradientBrush>
+        </Grid.Background>
+
+        <!-- Login Card -->
+        <Border Style="{StaticResource Card}"
+                MaxWidth="400"
+                MaxHeight="500"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Center"
+                Padding="40">
+            <StackPanel>
+                <!-- Logo/Title -->
+                <TextBlock Text="POS System"
+                           FontSize="32"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource PrimaryBrush}"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,10"/>
+
+                <TextBlock Text="Point of Sale"
+                           FontSize="16"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,40"/>
+
+                <!-- Username -->
+                <TextBlock Text="Username"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"
+                           Margin="0,0,0,8"/>
+
+                <TextBox Style="{StaticResource ModernTextBox}"
+                         Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
+                         Margin="0,0,0,20"/>
+
+                <!-- Password -->
+                <TextBlock Text="Password"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"
+                           Margin="0,0,0,8"/>
+
+                <PasswordBox x:Name="PasswordBox"
+                             Style="{StaticResource ModernPasswordBox}"
+                             Margin="0,0,0,20"
+                             PasswordChanged="PasswordBox_PasswordChanged"/>
+
+                <!-- Error Message -->
+                <TextBlock Text="{Binding ErrorMessage}"
+                           Foreground="{DynamicResource ErrorBrush}"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,10"
+                           Visibility="{Binding ErrorMessage, Converter={StaticResource BoolToVisibility}}"/>
+
+                <!-- Login Button -->
+                <Button Content="Login"
+                        Style="{StaticResource PrimaryButton}"
+                        Command="{Binding LoginCommand}"
+                        Margin="0,10,0,20"
+                        Height="44"/>
+
+                <!-- Loading Indicator -->
+                <ProgressBar IsIndeterminate="True"
+                             Height="4"
+                             Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}"
+                             Foreground="{DynamicResource PrimaryBrush}"/>
+
+                <!-- Demo credentials hint -->
+                <Border Background="{DynamicResource BackgroundSecondaryBrush}"
+                        CornerRadius="6"
+                        Padding="12"
+                        Margin="0,20,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Demo Credentials"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   FontSize="12"
+                                   Margin="0,0,0,6"/>
+                        <TextBlock Text="Username: admin"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Text="Password: admin123"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

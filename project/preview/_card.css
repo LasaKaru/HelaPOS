@@ -1,0 +1,15 @@
+/* Shared base for preview cards — keeps specimens clean & consistent */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { background: var(--bg); }
+body {
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+  padding: 22px 26px;
+  -webkit-font-smoothing: antialiased;
+}
+.row { display: flex; gap: 14px; align-items: stretch; flex-wrap: wrap; }
+.col { display: flex; flex-direction: column; gap: 6px; }
+.lbl { font-size: 11px; color: var(--text-tertiary); font-weight: 600;
+       letter-spacing: .04em; text-transform: uppercase; }
+.mono { font-family: var(--font-mono); }
+.muted { color: var(--text-secondary); }

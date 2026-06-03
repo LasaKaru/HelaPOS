@@ -143,7 +143,9 @@
         rounding:"none",        // "none" | "0.05" | "0.50" | "1"
         receiptHeader:"",       // extra line under the store name
         receiptFooter:"Thank you! Please come again.",
-        taxId:"" };             // tax / VAT registration no. printed on receipts
+        taxId:"",               // tax / VAT registration no. printed on receipts
+        autoPromos:true,        // master switch for rule-based automatic promotions
+        promoRules:{} };        // { ruleId: false } to disable a specific rule (default on)
       function load()     { try { return {...DEFAULTS,...JSON.parse(localStorage.getItem(KEY)||"{}")}; } catch(e) { return {...DEFAULTS}; } }
       function save(cfg)  { try { localStorage.setItem(KEY,JSON.stringify(cfg)); } catch(e) {} }
       function apply(cfg) {
@@ -378,6 +380,49 @@
       LUNCH15:  { code:"LUNCH15",  type:"pct", value:15, label:"15% lunch promo" },
     };
     window.HELA_COUPON = (code) => window.HELA_COUPONS[(code||"").trim().toUpperCase()] || null;
+
+    /* ===== Rule-based automatic promotions =====
+       Order-level rules that auto-apply (best one wins) when no manual coupon is set.
+       Each rule: { id, label, type:'pct'|'amt', value, cond:{ minSubtotal, minItems,
+       days:[0..6], hours:[startHour,endHourExclusive] } }. Enable/disable per store
+       in Settings (cfg.autoPromos master switch + cfg.promoRules[id]===false). */
+    window.HELA_PROMO_RULES = [
+      { id:"happyhour", label:"Happy Hour 15%",        type:"pct", value:15, cond:{ hours:[15,18] } },
+      { id:"bigspend",  label:"Spend 100 → 10% off",   type:"pct", value:10, cond:{ minSubtotal:100 } },
+      { id:"weekend",   label:"Weekend $5 off (min $40)", type:"amt", value:5, cond:{ days:[0,6], minSubtotal:40 } },
+      { id:"bulk",      label:"10+ items → 8% off",    type:"pct", value:8,  cond:{ minItems:10 } },
+    ];
+    // Describe a rule's conditions in plain words (for Settings).
+    window.HELA_PROMO_DESC = function (r) {
+      const c = r.cond||{}, p = [];
+      if (c.minSubtotal) p.push("subtotal ≥ " + window.HELA_DATA.fmt(c.minSubtotal));
+      if (c.minItems)    p.push(c.minItems + "+ items");
+      if (c.hours)       p.push(c.hours[0] + ":00–" + c.hours[1] + ":00");
+      if (c.days)        p.push(c.days.map((d)=>["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]).join("/"));
+      return p.join(" · ") || "always";
+    };
+    // Evaluate rules against the current cart; return the best-matching promo or null.
+    window.HELA_AUTOPROMO = function (cart, cfg) {
+      cfg = cfg || window.HELA_CONFIG.load();
+      if (!cart || !cart.length || cfg.autoPromos===false) return null;
+      const base = window.HELA_TOTALS(cart, cfg, null);
+      const subtotal = base.subtotal;
+      const now = new Date(), day = now.getDay(), hour = now.getHours();
+      const itemCount = cart.reduce((s,i)=>s+i.qty,0);
+      const disabled = cfg.promoRules || {};
+      let best=null, bestVal=0;
+      (window.HELA_PROMO_RULES||[]).forEach((r)=>{
+        if (disabled[r.id]===false) return;
+        const c = r.cond||{};
+        if (c.minSubtotal && subtotal < c.minSubtotal) return;
+        if (c.minItems && itemCount < c.minItems) return;
+        if (c.days && c.days.indexOf(day) < 0) return;
+        if (c.hours && !(hour>=c.hours[0] && hour<c.hours[1])) return;
+        const val = r.type==="pct" ? subtotal*(r.value/100) : Math.min(r.value, subtotal);
+        if (val > bestVal) { bestVal=val; best=r; }
+      });
+      return best ? { code:best.label, type:best.type, value:best.value, label:best.label, auto:true } : null;
+    };
 
     /* Stock */
     const STOCK_KEY = "hela.stock.v1";
@@ -979,7 +1024,7 @@
     /* ───── Home / POS screen ───── */
     function HomeScreen({ cart, setCart, table, query, onProceed, orderType, setOrderType, held, onHold, onRecall,
                           products, orderCustomer, onPickCustomer, onVoid, discountLimit=100, freeDiscount=true, requireManager, cfg,
-                          promo, setPromo, onAdd }) {
+                          promo, setPromo, onAdd, autoPromo }) {
       const D = window.HELA_DATA, fmt = D.fmt;
       const [cat, setCat] = useState("lunch");
       const [open, setOpen] = useState(null);
@@ -1000,7 +1045,8 @@
       const setQty = (line,n)   => setCart((c)=>c.map((i)=>i.line===line?{...i,qty:Math.max(1,n)}:i));
       const remove = (line)     => setCart((c)=>c.filter((i)=>i.line!==line));
 
-      const T = window.HELA_TOTALS(cart, cfg, promo);
+      const effPromo = promo || autoPromo;
+      const T = window.HELA_TOTALS(cart, cfg, effPromo);
       const payable = T.total;
 
       return (
@@ -1183,13 +1229,19 @@
             {/* Totals */}
             <div style={{padding:"14px 18px",borderTop:"1px solid var(--border)"}}>
               <Tot k="Subtotal" v={fmt(T.subtotal)} />
-              {promo && (
+              {promo ? (
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,alignItems:"center"}}>
                   <span style={{fontSize:13,color:"var(--success)"}}>🎟 {promo.code}
                     <span onClick={()=>setPromo(null)} style={{color:"var(--text-tertiary)",cursor:"pointer",marginLeft:6}}>✕</span></span>
                   <span style={{fontSize:13,fontWeight:600,color:"var(--success)"}}>{"– "+fmt(T.orderDiscount)}</span>
                 </div>
-              )}
+              ) : autoPromo ? (
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,alignItems:"center"}}>
+                  <span style={{fontSize:13,color:"var(--success)"}}>✨ {autoPromo.label}
+                    <span style={{fontSize:9,fontWeight:700,color:"var(--primary)",background:"var(--primary-light)",borderRadius:6,padding:"1px 5px",marginLeft:6}}>AUTO</span></span>
+                  <span style={{fontSize:13,fontWeight:600,color:"var(--success)"}}>{"– "+fmt(T.orderDiscount)}</span>
+                </div>
+              ) : null}
               {T.discount>0&&<Tot k="Discount (total)" v={"– "+fmt(T.discount)} tone="success" />}
               {T.service>0&&<Tot k={"Service ("+(cfg&&cfg.serviceCharge||0)+"%)"} v={fmt(T.service)} />}
               <Tot k={(cfg&&cfg.taxLabel||"Tax")+" ("+T.taxRate+"%"+(T.inclusive?" incl":"")+")"} v={fmt(T.tax)} />
@@ -1725,6 +1777,41 @@
                     <option value="0.50">Nearest 0.50</option><option value="1">Nearest 1</option>
                   </select>
                 </div>
+              </div>
+            </Card>
+
+            {/* Automatic promotions */}
+            <Card>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <div style={{fontSize:18,fontWeight:600}}>✨ Automatic Promotions</div>
+                <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,cursor:"pointer"}}>
+                  <input type="checkbox" checked={cfg.autoPromos!==false} onChange={(e)=>update({autoPromos:e.target.checked})} />
+                  Enable
+                </label>
+              </div>
+              <div style={{fontSize:13,color:"var(--text-secondary)",marginBottom:16}}>
+                Rules apply automatically at the POS (the best single match wins) when no manual coupon is entered.
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:8,opacity:cfg.autoPromos!==false?1:.5,pointerEvents:cfg.autoPromos!==false?"auto":"none"}}>
+                {window.HELA_PROMO_RULES.map((r)=>{
+                  const on = (cfg.promoRules||{})[r.id] !== false;
+                  return (
+                    <div key={r.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+                      padding:"12px 14px",borderRadius:10,border:"1px solid var(--border)",background:"var(--surface)"}}>
+                      <div>
+                        <div style={{fontWeight:600,fontSize:14}}>{r.label}
+                          <span style={{fontSize:11,fontWeight:700,color:"var(--success)",marginLeft:8}}>
+                            {r.type==="pct"?r.value+"% off":window.HELA_DATA.fmt(r.value)+" off"}</span></div>
+                        <div style={{fontSize:12,color:"var(--text-tertiary)",marginTop:2}}>When: {window.HELA_PROMO_DESC(r)}</div>
+                      </div>
+                      <label style={{display:"flex",alignItems:"center",gap:8,fontSize:12,cursor:"pointer"}}>
+                        <input type="checkbox" checked={on}
+                          onChange={(e)=>update({promoRules:{...(cfg.promoRules||{}),[r.id]:e.target.checked}})} />
+                        {on?"On":"Off"}
+                      </label>
+                    </div>
+                  );
+                })}
               </div>
             </Card>
 
@@ -4069,6 +4156,8 @@ counters  (name, value)
       const lockNow = ()=>{ if (user) { window.HelaDB.log({ user:user.username, role:user.role, action:"lock", detail:"manual" }); setLocked(true); } };
 
       const orderTotal = (items, promo) => window.HELA_TOTALS(items, cfg, promo).total;
+      // Best auto-promotion for the current cart (suppressed when a manual coupon is set).
+      const autoPromo = orderPromo ? null : window.HELA_AUTOPROMO(cart, cfg);
       const resetOrder = ()=>{ setCart([]); setTable(null); setOrderType("Dine in"); setOrderCustomer(null); setOrderPromo(null); };
       // Add a product to the cart. Modifier selections become a distinct line; their
       // upcharge is baked into the line's unit price so HELA_TOTALS works unchanged.
@@ -4113,7 +4202,8 @@ counters  (name, value)
       const onKotSend = () => { const amt = kot.total; setKot(null); setPay({ total:amt }); };
 
       const onPaid = (details) => {
-        const T = window.HELA_TOTALS(cart, cfg, orderPromo);
+        const promoUsed = orderPromo || window.HELA_AUTOPROMO(cart, cfg);
+        const T = window.HELA_TOTALS(cart, cfg, promoUsed);
         const total     = T.total;
         const billSeq   = window.HelaDB.counter("bill");
         const invSeq    = window.HelaDB.counter("invoice");
@@ -4126,7 +4216,8 @@ counters  (name, value)
           date:now.toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}),
           time:now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}), ts:now.getTime(),
           items:cart, subtotal:T.subtotal, discount:T.discount, service:T.service, tax:T.tax,
-          coupon:orderPromo?orderPromo.code:null, taxRate:T.taxRate, rounding:T.roundingAdj, total, cost:Math.round(cost*100)/100,
+          coupon:promoUsed?promoUsed.code:null, autoPromo:promoUsed&&promoUsed.auto?true:false,
+          taxRate:T.taxRate, rounding:T.roundingAdj, total, cost:Math.round(cost*100)/100,
           shiftId:shift?shift.id:null, cashier:user?user.name:"Admin", ...details };
         window.HelaDB.insert("bills", sale);
         if (orderCustomer) {
@@ -4266,7 +4357,7 @@ counters  (name, value)
                     products={products} onProceed={onProceed} orderType={orderType}
                     setOrderType={setOrderType} held={held} onHold={onHold} onRecall={onRecall}
                     orderCustomer={orderCustomer} onPickCustomer={()=>setCustModal(true)} cfg={cfg}
-                    promo={orderPromo} setPromo={setOrderPromo} onAdd={requestAdd}
+                    promo={orderPromo} setPromo={setOrderPromo} onAdd={requestAdd} autoPromo={autoPromo}
                     onVoid={onVoid} discountLimit={cfg.discountLimit==null?100:cfg.discountLimit}
                     freeDiscount={user && (user.role==="admin"||user.role==="manager")} requireManager={requireManager} />
                 : content}

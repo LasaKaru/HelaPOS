@@ -15,7 +15,7 @@ operational feature set.
 
 | Area | What's included |
 |------|-----------------|
-| **Sales (POS)** | Category menu + image tiles, cart with per‑line qty / discount / notes, **barcode / SKU quick‑add** (type or scan + Enter), hold & recall orders, void (manager‑approved), order types (Dine‑in / Takeaway / Delivery), table selection |
+| **Sales (POS)** | Category menu + image tiles, cart with per‑line qty / discount / notes, **item modifiers / variants** (size, spice level, add‑ons — priced & shown on KOT/receipt/KDS), **barcode / SKU quick‑add** (type or scan + Enter), hold & recall orders, void (manager‑approved), order types (Dine‑in / Takeaway / Delivery), table selection |
 | **Payments** | Cash (quick‑cash + change due), Card, Mobile, and **split / multi‑tender** ("Mixed"); **Kitchen Order Ticket (KOT)** before pay |
 | **Pricing engine** | Configurable **tax rate**, **tax‑inclusive** pricing, **service charge**, **rounding** (0.05 / 0.50 / 1), line + order discounts, **coupons / promotions** (`SAVE10`, `WELCOME5`, `VIP20`, `LUNCH15`) |
 | **Invoices** | Every sale is saved; searchable history, reprint, CSV export, and **refunds / returns** (partial or full, manager‑approved) |
@@ -225,7 +225,7 @@ local DB). This is exactly what the Phase‑2 WPF port and/or a backend API will
 - [x] Invoices, refunds, shifts (X/Z), reports from real data
 - [x] Inventory + cost, purchasing/goods‑receiving, customers
 - [x] Barcode quick‑add, Kitchen Display System
-- [ ] Item modifiers / variants (size, add‑ons)
+- [x] Item modifiers / variants (size, spice, add‑ons) with per‑product editor
 - [ ] Table merge / transfer, store credit / customer accounts
 - [ ] Rule‑based promotions, multi‑store + backend sync
 

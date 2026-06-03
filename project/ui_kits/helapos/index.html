@@ -3493,6 +3493,79 @@ counters  (name, value)
       );
     }
 
+    /* ───── Kitchen Display System (KDS) — live order tickets ───── */
+    const KDS_FLOW = ["New","Preparing","Ready","Served"];
+    const KDS_COLOR = { New:"var(--warning)", Preparing:"var(--info)", Ready:"var(--success)", Served:"var(--text-tertiary)" };
+    function KitchenScreen() {
+      const [bills, setBills] = useState(()=>window.HelaDB.all("bills"));
+      const [tick, setTick] = useState(0);
+      useEffect(()=>{ const iv=setInterval(()=>setBills(window.HelaDB.all("bills")), 4000); return ()=>clearInterval(iv); }, []);
+      const today = new Date(); today.setHours(0,0,0,0);
+      const tickets = bills.filter((b)=>b.kind!=="refund" && (b.ts||0)>=today.getTime())
+        .map((b)=>({ ...b, kds:b.kds||"New" }));
+      const advance = (b)=>{ const i=KDS_FLOW.indexOf(b.kds||"New"); const next=KDS_FLOW[Math.min(i+1,KDS_FLOW.length-1)];
+        window.HelaDB.update("bills", b.id, { kds:next }); setBills(window.HelaDB.all("bills")); setTick((t)=>t+1); };
+      const cols = ["New","Preparing","Ready"];
+      const elapsed = (ts)=>{ if(!ts) return ""; const m=Math.floor((Date.now()-ts)/60000); return m<1?"just now":m+"m ago"; };
+      return (
+        <div>
+          <SubHeader title="Kitchen Display" subtitle={"Today · "+tickets.filter((t)=>t.kds!=="Served").length+" active tickets"}
+            right={<button onClick={()=>setBills(window.HelaDB.all("bills"))} style={{background:"var(--bg-secondary)",border:"1px solid var(--border)",
+              borderRadius:10,padding:"9px 16px",cursor:"pointer",fontFamily:"var(--font-sans)",fontSize:13,fontWeight:600,color:"var(--text-primary)"}}>↻ Refresh</button>} />
+          <div style={{padding:"22px 30px"}}>
+            {tickets.length===0 ? (
+              <div style={{padding:"60px 0",textAlign:"center",color:"var(--text-tertiary)"}}>
+                <div style={{fontSize:48,marginBottom:10}}>👨‍🍳</div>
+                <div style={{fontSize:16,fontWeight:600,color:"var(--text-secondary)"}}>No tickets today</div>
+                <div style={{fontSize:13}}>Completed orders appear here for the kitchen to prepare.</div>
+              </div>
+            ) : (
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,alignItems:"start"}}>
+                {cols.map((col)=>{
+                  const list = tickets.filter((t)=>t.kds===col);
+                  return (
+                    <div key={col}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                        <span style={{width:10,height:10,borderRadius:3,background:KDS_COLOR[col]}} />
+                        <span style={{fontWeight:700}}>{col}</span>
+                        <span style={{fontSize:12,color:"var(--text-tertiary)"}}>({list.length})</span>
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                        {list.map((t)=>(
+                          <div key={t.id} style={{background:"var(--surface)",border:"1px solid var(--border)",borderTop:"4px solid "+KDS_COLOR[col],
+                            borderRadius:"var(--radius-lg)",padding:14,boxShadow:"var(--shadow-card)"}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                              <span style={{fontWeight:800}}>{t.no}</span>
+                              <span style={{fontSize:11,color:"var(--text-tertiary)"}}>{elapsed(t.ts)}</span>
+                            </div>
+                            <div style={{fontSize:12,color:"var(--text-secondary)",marginBottom:8}}>{t.type}{t.table?" · Table "+t.table:""}</div>
+                            <div style={{borderTop:"1px solid var(--border)",paddingTop:8}}>
+                              {t.items.map((i,idx)=>(
+                                <div key={idx} style={{fontSize:13,marginBottom:4}}>
+                                  <b>{i.qty}×</b> {i.name}
+                                  {i.note&&<div style={{fontSize:11,color:"var(--warning-dark)",paddingLeft:18}}>★ {i.note}</div>}
+                                </div>
+                              ))}
+                            </div>
+                            <button onClick={()=>advance(t)} style={{marginTop:10,width:"100%",padding:"9px 0",borderRadius:8,border:"none",cursor:"pointer",
+                              fontFamily:"var(--font-sans)",fontSize:13,fontWeight:700,color:"#fff",
+                              background:col==="New"?"var(--info)":col==="Preparing"?"var(--success)":"var(--text-secondary)"}}>
+                              {col==="New"?"Start preparing →":col==="Preparing"?"Mark ready →":"Mark served ✓"}
+                            </button>
+                          </div>
+                        ))}
+                        {list.length===0 && <div style={{fontSize:12,color:"var(--text-tertiary)",textAlign:"center",padding:"16px 0"}}>—</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     /* ───── App shell ───── */
     // each nav item declares the permission it needs (null = always visible)
     const NAV = [
@@ -3500,6 +3573,7 @@ counters  (name, value)
       { id:"home",      icon:"🏠", label:"Home",      perm:"sell"       },
       { id:"tables",    icon:"🍽️",label:"Tables",     perm:"tables"     },
       { id:"orders",    icon:"🧾", label:"Orders",     perm:"orders"     },
+      { id:"kitchen",   icon:"👨‍🍳",label:"Kitchen",   perm:"orders"     },
       { id:"invoices",  icon:"📄", label:"Invoices",   perm:"invoices"   },
       { id:"inventory", icon:"📦", label:"Inventory",  perm:"inventory"  },
       { id:"purchasing",icon:"🚚", label:"Purchasing", perm:"purchasing" },
@@ -3840,6 +3914,7 @@ counters  (name, value)
       else if (active==="inventory") content = <InventoryScreen products={products} canEdit={can("inventory.edit")}
                                           onAddProduct={()=>setProdEdit({})} onEditProduct={(p)=>setProdEdit(p)} />;
       else if (active==="purchasing") content = <PurchasingScreen products={products} user={user} />;
+      else if (active==="kitchen")   content = <KitchenScreen />;
       else if (active==="orders")    content = <OrdersScreen />;
 
       return (

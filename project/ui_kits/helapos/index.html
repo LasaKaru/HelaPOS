@@ -404,12 +404,12 @@
 
     /* ===== Seed customers ===== */
     window.HELA_CUSTOMERS_SEED = [
-      { id:1, name:"Nimal Perera",    phone:"+94 77 123 4567", visits:42, spent:1284.50, points:640,  last:"Today" },
-      { id:2, name:"Saman Fernando",  phone:"+94 71 988 2210", visits:17, spent:512.00,  points:255,  last:"Yesterday" },
-      { id:3, name:"Ayesha Jiffry",   phone:"+94 76 451 0098", visits:63, spent:2190.75, points:1095, last:"Today" },
-      { id:4, name:"Ruwan Silva",     phone:"+94 70 332 7741", visits:8,  spent:196.20,  points:98,   last:"3 days ago" },
-      { id:5, name:"Dilani Wickrama", phone:"+94 72 605 1123", visits:29, spent:874.00,  points:437,  last:"1 week ago" },
-      { id:6, name:"Kasun Bandara",   phone:"+94 78 220 9934", visits:5,  spent:132.40,  points:66,   last:"Today" },
+      { id:1, name:"Nimal Perera",    phone:"+94 77 123 4567", visits:42, spent:1284.50, points:640,  credit:25.00, last:"Today" },
+      { id:2, name:"Saman Fernando",  phone:"+94 71 988 2210", visits:17, spent:512.00,  points:255,  credit:0,     last:"Yesterday" },
+      { id:3, name:"Ayesha Jiffry",   phone:"+94 76 451 0098", visits:63, spent:2190.75, points:1095, credit:50.00, last:"Today" },
+      { id:4, name:"Ruwan Silva",     phone:"+94 70 332 7741", visits:8,  spent:196.20,  points:98,   credit:0,     last:"3 days ago" },
+      { id:5, name:"Dilani Wickrama", phone:"+94 72 605 1123", visits:29, spent:874.00,  points:437,  credit:12.50, last:"1 week ago" },
+      { id:6, name:"Kasun Bandara",   phone:"+94 78 220 9934", visits:5,  spent:132.40,  points:66,   credit:0,     last:"Today" },
     ];
 
     /* ============================================================
@@ -1225,8 +1225,11 @@
     }
 
     /* ───── Payment modal ───── */
-    function PaymentModal({ total, onClose, onComplete }) {
+    function PaymentModal({ total, customer, onClose, onComplete }) {
       const fmt = window.HELA_DATA.fmt;
+      // Fresh store-credit balance for the order's customer (if any).
+      const credit = customer ? ((window.HelaDB.get("customers", customer.id)||customer).credit||0) : 0;
+      const hasCredit = credit > 0;
       const [method, setMethod] = useState("Cash");
       const [tendered, setTendered] = useState("");
       const [done, setDone] = useState(false);
@@ -1237,12 +1240,22 @@
       const paidSplit = tenders.reduce((s,x)=>s+x.amount,0);
       const remaining = Math.max(0, Math.round((total-paidSplit)*100)/100);
       const change = method==="Mixed" ? Math.max(0, Math.round((paidSplit-total)*100)/100) : Math.max(0,t-total);
+      // credit already committed in the split, and how much is still available
+      const splitCreditUsed = tenders.filter((x)=>x.method==="Credit").reduce((s,x)=>s+x.amount,0);
+      const creditAvail = Math.max(0, Math.round((credit-splitCreditUsed)*100)/100);
+      const creditUsed = method==="Credit" ? Math.min(total,credit) : method==="Mixed" ? splitCreditUsed : 0;
       const canComplete = method==="Cash" ? Math.round(t*100)>=Math.round(total*100)
-        : method==="Mixed" ? Math.round(paidSplit*100)>=Math.round(total*100) : true;
-      const addTender = () => { const a=parseFloat(splitAmt)|| remaining; if(a<=0) return;
+        : method==="Mixed" ? Math.round(paidSplit*100)>=Math.round(total*100)
+        : method==="Credit" ? Math.round(credit*100)>=Math.round(total*100) : true;
+      const methods = [["Cash","💵"],["Card","💳"],["Mobile","📱"],["Mixed","🔀"]].concat(hasCredit?[["Credit","🎁"]]:[]);
+      const splitMethods = ["Cash","Card","Mobile"].concat(hasCredit?["Credit"]:[]);
+      const addTender = () => { let a=parseFloat(splitAmt)|| remaining;
+        if (splitMethod==="Credit") a = Math.min(a, creditAvail, remaining);
+        if(a<=0) return;
         setTenders((x)=>[...x,{method:splitMethod,amount:Math.round(a*100)/100}]); setSplitAmt(""); };
       const complete = ()=>{ setDone(true);
-        const payload = method==="Mixed" ? { method:"Mixed", tenders, change }
+        const payload = method==="Mixed" ? { method:"Mixed", tenders, change, creditUsed }
+          : method==="Credit" ? { method:"Credit", tendered:total, change:0, creditUsed }
           : { method, tendered:t, change };
         setTimeout(()=>onComplete(payload),1000); };
 
@@ -1276,9 +1289,12 @@
                     </div>
                   </div>
                   <div style={{padding:"20px 30px",overflow:"auto",flex:1}}>
-                    <div style={{fontSize:13,color:"var(--text-secondary)",marginBottom:10}}>Payment Method *</div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:22}}>
-                      {[["Cash","💵"],["Card","💳"],["Mobile","📱"],["Mixed","🔀"]].map(([m,ic])=>(
+                    <div style={{fontSize:13,color:"var(--text-secondary)",marginBottom:10,display:"flex",justifyContent:"space-between"}}>
+                      <span>Payment Method *</span>
+                      {hasCredit && <span style={{color:"var(--primary)",fontWeight:600}}>🎁 {customer.name}: {fmt(credit)} credit</span>}
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat("+methods.length+",1fr)",gap:10,marginBottom:22}}>
+                      {methods.map(([m,ic])=>(
                         <button key={m} onClick={()=>setMethod(m)} style={{padding:"14px 6px",borderRadius:8,cursor:"pointer",
                           fontFamily:"var(--font-sans)",fontSize:13,fontWeight:600,textAlign:"center",
                           border:"1px solid "+(method===m?"var(--primary)":"var(--border)"),
@@ -1310,13 +1326,15 @@
                       <Card>
                         <div style={{fontSize:18,fontWeight:600,marginBottom:16}}>🔀 Split Payment</div>
                         <div style={{display:"flex",gap:8,marginBottom:12}}>
-                          {["Cash","Card","Mobile"].map((m)=>(
+                          {splitMethods.map((m)=>(
                             <button key={m} onClick={()=>setSplitMethod(m)} style={{flex:1,padding:"9px 0",borderRadius:8,cursor:"pointer",
                               fontFamily:"var(--font-sans)",fontSize:13,fontWeight:600,
                               border:"1px solid "+(splitMethod===m?"var(--primary)":"var(--border)"),
-                              background:splitMethod===m?"var(--primary-light)":"var(--surface)",color:"var(--text-primary)"}}>{m}</button>
+                              background:splitMethod===m?"var(--primary-light)":"var(--surface)",color:"var(--text-primary)"}}>
+                              {m==="Credit"?"🎁 Credit":m}</button>
                           ))}
                         </div>
+                        {splitMethod==="Credit" && <div style={{fontSize:12,color:"var(--primary)",marginBottom:8}}>Available store credit: {fmt(creditAvail)}</div>}
                         <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
                           <div style={{flex:1}}><Field label={"Amount (remaining "+fmt(remaining)+")"} value={splitAmt} onChange={setSplitAmt} placeholder={remaining.toFixed(2)} /></div>
                           <Button onClick={addTender} style={{height:42}}>Add</Button>
@@ -1338,6 +1356,25 @@
                           </div>
                         </div>
                       </Card>
+                    ) : method==="Credit" ? (
+                      <Card>
+                        <div style={{fontSize:18,fontWeight:600,marginBottom:16}}>🎁 Store Credit</div>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
+                          <span style={{color:"var(--text-secondary)"}}>Available credit</span>
+                          <span style={{fontWeight:700}}>{fmt(credit)}</span>
+                        </div>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
+                          <span style={{color:"var(--text-secondary)"}}>Applied to this sale</span>
+                          <span style={{fontWeight:700,color:"var(--primary)"}}>{fmt(Math.min(total,credit))}</span>
+                        </div>
+                        <div style={{display:"flex",justifyContent:"space-between",borderTop:"1px solid var(--border)",paddingTop:10}}>
+                          <span style={{color:"var(--text-secondary)"}}>Remaining after sale</span>
+                          <span style={{fontWeight:700,color:"var(--success)"}}>{fmt(Math.max(0,credit-total))}</span>
+                        </div>
+                        {credit<total && <div style={{background:"var(--bg-secondary)",borderRadius:6,padding:12,fontSize:12,color:"var(--error)",marginTop:14}}>
+                          Insufficient credit ({fmt(credit)}) for {fmt(total)}. Use <b>Mixed</b> to combine store credit with another tender.
+                        </div>}
+                      </Card>
                     ) : (
                       <Card>
                         <div style={{fontSize:18,fontWeight:600,marginBottom:16}}>
@@ -1355,7 +1392,9 @@
                     Payment Summary
                   </div>
                   <div style={{flex:1,padding:20}}>
-                    {[["Method",method],["Total",fmt(total)],...(method==="Cash"?[["Tendered",fmt(t),"success"]]:[])]
+                    {[["Method",method],["Total",fmt(total)],
+                      ...(method==="Cash"?[["Tendered",fmt(t),"success"]]:[]),
+                      ...(creditUsed>0?[["Store credit",fmt(creditUsed),"success"]]:[])]
                       .map(([k,v,tone])=>(
                         <div key={k} style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
                           <span style={{fontSize:14,color:"var(--text-secondary)"}}>{k}</span>
@@ -1432,6 +1471,12 @@
                 <div style={{textAlign:"center",marginTop:8,fontSize:11,color:"#111827",fontWeight:700}}>
                   {sale.customer.name} earned {sale.earned} loyalty points
                   <div style={{fontWeight:400,color:"#6B7280"}}>New balance: {sale.customer.points + sale.earned} pts</div>
+                </div>
+              )}
+              {sale.customer && sale.creditUsed>0 && (
+                <div style={{textAlign:"center",marginTop:6,fontSize:11,color:"#111827",fontWeight:700}}>
+                  Store credit used: {fmt(sale.creditUsed)}
+                  <div style={{fontWeight:400,color:"#6B7280"}}>Credit remaining: {fmt(Math.max(0,(sale.customer.credit||0)-sale.creditUsed))}</div>
                 </div>
               )}
               <div style={{textAlign:"center",marginTop:12,fontSize:11,color:"#6B7280"}}>
@@ -2131,16 +2176,26 @@
       const [q, setQ] = useState("");
       const [rows, setRows] = useState(()=>window.HelaDB.all("customers"));
       const [form, setForm] = useState(null); // {} add, customer edit
+      const [credForm, setCredForm] = useState(null); // customer for credit adjust
       const refresh = ()=>setRows(window.HelaDB.all("customers"));
       const save = (data) => {
         if (form && form.id) window.HelaDB.update("customers", form.id, data);
-        else window.HelaDB.insert("customers", { ...data, visits:0, spent:0, points:0, last:"New" });
+        else window.HelaDB.insert("customers", { ...data, visits:0, spent:0, points:0, credit:0, last:"New" });
         refresh(); setForm(null);
       };
+      const adjustCredit = (cust, delta, reason) => {
+        const c = window.HelaDB.get("customers", cust.id); if (!c) return;
+        const next = Math.max(0, Math.round(((c.credit||0)+delta)*100)/100);
+        window.HelaDB.update("customers", c.id, { credit:next });
+        window.HelaDB.log({ user:"admin", role:"admin", action:"credit_adjust",
+          detail:c.name+" "+(delta>=0?"+":"")+window.HELA_DATA.fmt(delta)+(reason?" · "+reason:"")+" → "+window.HELA_DATA.fmt(next) });
+        refresh(); setCredForm(null);
+      };
+      const totalCredit = rows.reduce((s,c)=>s+(c.credit||0),0);
       const list = q.trim() ? rows.filter((c)=>(c.name+c.phone).toLowerCase().includes(q.toLowerCase())) : rows;
       return (
         <div>
-          <SubHeader title="Customers" subtitle={rows.length+" customers · loyalty members"}
+          <SubHeader title="Customers" subtitle={rows.length+" customers · loyalty · "+fmt(totalCredit)+" store credit outstanding"}
             right={canEdit && <button onClick={()=>setForm({})} style={{display:"flex",alignItems:"center",gap:7,background:"var(--primary)",color:"#fff",
               border:"none",borderRadius:10,padding:"10px 16px",cursor:"pointer",fontFamily:"var(--font-sans)",fontSize:14,fontWeight:600}}>
               ＋ Add Customer
@@ -2151,12 +2206,12 @@
                 background:"var(--bg)",color:"var(--text-primary)",fontFamily:"var(--font-sans)",fontSize:14,outline:"none"}} />
             <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius-lg)",
               overflow:"hidden",boxShadow:"var(--shadow-card)"}}>
-              <div style={{display:"grid",gridTemplateColumns:"2fr 1.4fr .8fr 1.1fr 1fr 1fr"+(canEdit?" 50px":""),padding:"12px 18px",
+              <div style={{display:"grid",gridTemplateColumns:"1.8fr 1.3fr .6fr 1fr .9fr 1fr 1fr"+(canEdit?" 78px":""),padding:"12px 18px",
                 background:"var(--bg-secondary)",fontSize:12,fontWeight:700,color:"var(--text-secondary)",borderBottom:"1px solid var(--border)"}}>
-                <span>Customer</span><span>Phone</span><span>Visits</span><span>Total Spent</span><span>Points</span><span>Last Visit</span>{canEdit&&<span></span>}
+                <span>Customer</span><span>Phone</span><span>Visits</span><span>Total Spent</span><span>Points</span><span>Store Credit</span><span>Last Visit</span>{canEdit&&<span></span>}
               </div>
               {list.map((c,i)=>(
-                <div key={c.id} style={{display:"grid",gridTemplateColumns:"2fr 1.4fr .8fr 1.1fr 1fr 1fr"+(canEdit?" 50px":""),
+                <div key={c.id} style={{display:"grid",gridTemplateColumns:"1.8fr 1.3fr .6fr 1fr .9fr 1fr 1fr"+(canEdit?" 78px":""),
                   padding:"12px 18px",alignItems:"center",fontSize:14,borderBottom:i<list.length-1?"1px solid var(--border)":"none"}}>
                   <div style={{display:"flex",alignItems:"center",gap:12}}>
                     <span style={{width:38,height:38,borderRadius:"50%",background:AV_COLORS[i%AV_COLORS.length],color:"#fff",
@@ -2169,13 +2224,63 @@
                   <span style={{color:"var(--text-secondary)"}}>{c.visits}</span>
                   <span style={{fontWeight:700}}>{fmt(c.spent)}</span>
                   <span><span style={{fontSize:12,fontWeight:700,color:"var(--primary)",background:"var(--primary-light)",borderRadius:20,padding:"4px 12px"}}>{c.points} pts</span></span>
+                  <span style={{fontWeight:700,color:(c.credit||0)>0?"var(--success)":"var(--text-tertiary)"}}>{fmt(c.credit||0)}</span>
                   <span style={{color:"var(--text-secondary)"}}>{c.last}</span>
-                  {canEdit && <button onClick={()=>setForm(c)} title="Edit" style={{...invBtn,width:32,height:32,fontSize:14}}>✏️</button>}
+                  {canEdit && <span style={{display:"flex",gap:4}}>
+                    <button onClick={()=>setCredForm(c)} title="Adjust store credit" style={{...invBtn,width:32,height:32,fontSize:14}}>🎁</button>
+                    <button onClick={()=>setForm(c)} title="Edit" style={{...invBtn,width:32,height:32,fontSize:14}}>✏️</button>
+                  </span>}
                 </div>
               ))}
             </div>
           </div>
           {form && <CustomerFormModal customer={form.id?form:null} onSave={save} onClose={()=>setForm(null)} />}
+          {credForm && <CreditAdjustModal customer={credForm} onApply={adjustCredit} onClose={()=>setCredForm(null)} />}
+        </div>
+      );
+    }
+
+    /* ───── Store-credit adjust modal ───── */
+    function CreditAdjustModal({ customer, onApply, onClose }) {
+      const fmt = window.HELA_DATA.fmt;
+      const [mode, setMode] = useState("add");   // add | deduct
+      const [amount, setAmount] = useState("");
+      const [reason, setReason] = useState("");
+      const amt = parseFloat(amount)||0;
+      const cur = customer.credit||0;
+      const next = mode==="add" ? cur+amt : Math.max(0,cur-amt);
+      const valid = amt>0 && (mode==="add" || amt<=cur+0.001);
+      return (
+        <div style={{position:"fixed",inset:0,background:"rgba(17,24,39,0.45)",display:"flex",
+          alignItems:"center",justifyContent:"center",zIndex:55,padding:20}} onClick={onClose}>
+          <div onClick={(e)=>e.stopPropagation()} className="anim-slide"
+            style={{width:400,background:"var(--bg)",borderRadius:"var(--radius-lg)",boxShadow:"var(--shadow-floating)",overflow:"hidden"}}>
+            <div style={{padding:"18px 22px",borderBottom:"1px solid var(--border)"}}>
+              <div style={{fontSize:18,fontWeight:700}}>🎁 Store Credit · {customer.name}</div>
+              <div style={{fontSize:13,color:"var(--text-secondary)",marginTop:2}}>Current balance: <b>{fmt(cur)}</b></div>
+            </div>
+            <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:14}}>
+              <div style={{display:"flex",gap:8}}>
+                {[["add","＋ Top up"],["deduct","− Deduct"]].map(([m,lbl])=>(
+                  <button key={m} onClick={()=>setMode(m)} style={{flex:1,padding:"10px 0",borderRadius:8,cursor:"pointer",
+                    fontFamily:"var(--font-sans)",fontSize:13,fontWeight:600,
+                    border:"1px solid "+(mode===m?"var(--primary)":"var(--border)"),
+                    background:mode===m?"var(--primary-light)":"var(--surface)",color:"var(--text-primary)"}}>{lbl}</button>
+                ))}
+              </div>
+              <Field label="Amount" value={amount} onChange={setAmount} placeholder="0.00" />
+              <Field label="Reason / note" value={reason} onChange={setReason} placeholder={mode==="add"?"e.g. gift card, goodwill":"e.g. correction"} />
+              <div style={{background:"var(--bg-secondary)",borderRadius:8,padding:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{color:"var(--text-secondary)"}}>New balance</span>
+                <span style={{fontSize:20,fontWeight:800,color:"var(--primary)"}}>{fmt(next)}</span>
+              </div>
+              {mode==="deduct" && amt>cur && <div style={{fontSize:12,color:"var(--error)"}}>Cannot deduct more than the current balance.</div>}
+            </div>
+            <div style={{padding:"14px 22px",borderTop:"1px solid var(--border)",display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <Button variant="secondary" onClick={onClose}>Cancel</Button>
+              <Button disabled={!valid} onClick={()=>onApply(customer, mode==="add"?amt:-amt, reason.trim())}>Apply</Button>
+            </div>
+          </div>
         </div>
       );
     }
@@ -2859,7 +2964,7 @@
       const [view, setView] = useState(null);
       const [refund, setRefund] = useState(null);
       const [method, setMethod] = useState("All");
-      const doRefund = (orig, lines, reason) => { onRefund(orig, lines, reason);
+      const doRefund = (orig, lines, reason, toCredit) => { onRefund(orig, lines, reason, toCredit);
         setTimeout(()=>setRows(window.HelaDB.all("bills").slice().reverse()), 50); setRefund(null); };
       let list = rows;
       if (method!=="All") list = list.filter((b)=>b.method===method);
@@ -2935,6 +3040,7 @@
       const fmt = window.HELA_DATA.fmt;
       const [qty, setQty] = useState(()=>bill.items.map((i)=>i.qty));   // refund qty per line (default full)
       const [reason, setReason] = useState("");
+      const [toCredit, setToCredit] = useState(false);   // refund to store credit instead of cash/card
       const lines = bill.items.map((i,idx)=>({ ...i, qty:qty[idx] }));
       const T = window.HELA_TOTALS(lines.filter((l)=>l.qty>0), window.HELA_CONFIG.load());
       const setQ = (idx,v)=>setQty((a)=>a.map((x,j)=>j===idx?Math.max(0,Math.min(bill.items[idx].qty,v)):x));
@@ -2960,12 +3066,18 @@
                 </div>
               ))}
               <div style={{marginTop:14}}><Field label="Reason" value={reason} onChange={setReason} placeholder="e.g. wrong item, customer changed mind" /></div>
+              {bill.customer && (
+                <label style={{display:"flex",alignItems:"center",gap:8,marginTop:14,cursor:"pointer",fontSize:13}}>
+                  <input type="checkbox" checked={toCredit} onChange={(e)=>setToCredit(e.target.checked)} />
+                  Refund to <b>{bill.customer.name}</b>'s store credit instead of {bill.method||"cash"}
+                </label>
+              )}
             </div>
             <div style={{padding:"14px 22px",borderTop:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontWeight:800,color:"var(--error)"}}>Refund {fmt(T.total)}</span>
+              <span style={{fontWeight:800,color:"var(--error)"}}>Refund {fmt(T.total)}{toCredit?" → credit":""}</span>
               <span style={{display:"flex",gap:10}}>
                 <Button variant="secondary" onClick={onClose}>Cancel</Button>
-                <Button disabled={!any} onClick={()=>onConfirm(bill, lines, reason)} style={{background:"var(--error)"}}>Process Refund</Button>
+                <Button disabled={!any} onClick={()=>onConfirm(bill, lines, reason, toCredit)} style={{background:"var(--error)"}}>Process Refund</Button>
               </span>
             </div>
           </div>
@@ -4019,9 +4131,15 @@ counters  (name, value)
         window.HelaDB.insert("bills", sale);
         if (orderCustomer) {
           const c = window.HelaDB.get("customers", orderCustomer.id);
-          if (c) window.HelaDB.update("customers", c.id,
-            { points:(c.points||0)+earned, spent:Math.round(((c.spent||0)+total)*100)/100,
-              visits:(c.visits||0)+1, last:"Today" });
+          if (c) {
+            const upd = { points:(c.points||0)+earned, spent:Math.round(((c.spent||0)+total)*100)/100,
+              visits:(c.visits||0)+1, last:"Today" };
+            const used = Math.min(details.creditUsed||0, c.credit||0);   // clamp to avoid overspend
+            if (used>0) upd.credit = Math.round(((c.credit||0)-used)*100)/100;
+            window.HelaDB.update("customers", c.id, upd);
+            if (used>0 && user) window.HelaDB.log({ user:user.username, role:user.role, action:"credit_redeem",
+              detail:c.name+" · "+window.HELA_DATA.fmt(used)+" on "+invoiceNo });
+          }
         }
         if (user) window.HelaDB.log({ user:user.username, role:user.role, action:"sale",
           detail:invoiceNo+" · "+window.HELA_DATA.fmt(total)+" · "+details.method });
@@ -4055,22 +4173,34 @@ counters  (name, value)
       };
 
       // ----- Refund / return against a saved invoice -----
-      const refundBill = (orig, lines, reason) => {
+      const refundBill = (orig, lines, reason, toCredit) => {
         const refundItems = lines.filter((l)=>l.qty>0).map((l)=>({ ...l }));
         if (!refundItems.length) return;
         const T = window.HELA_TOTALS(refundItems, cfg);
         const seq = window.HelaDB.counter("invoice");
         const now = new Date();
+        // Refund to store credit only if the original sale had a customer on file.
+        const credit = !!(toCredit && orig.customer);
         const rb = { kind:"refund", refundOf:orig.invoiceNo, no:"REF-"+String(window.HelaDB.counter("bill")).padStart(5,"0"),
           invoiceNo:(cfg.invoicePrefix||"INV")+"-R"+String(seq).padStart(5,"0"),
           date:now.toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}),
           time:now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}), ts:now.getTime(),
           type:orig.type, table:orig.table, customer:orig.customer, items:refundItems,
           subtotal:-T.subtotal, discount:-T.discount, service:-T.service, tax:-T.tax, total:-T.total,
-          method:orig.method, reason, cashier:user?user.name:"Admin", shiftId:shift?shift.id:null };
+          method:credit?"Store Credit":orig.method, toCredit:credit, reason, cashier:user?user.name:"Admin", shiftId:shift?shift.id:null };
         window.HelaDB.insert("bills", rb);
-        window.HelaDB.log({ user:user.username, role:user.role, action:"refund", detail:rb.invoiceNo+" of "+orig.invoiceNo+" · "+window.HELA_DATA.fmt(T.total) });
-        flash("Refund recorded");
+        if (credit) {
+          const c = window.HelaDB.get("customers", orig.customer.id);
+          if (c) {
+            const next = Math.round(((c.credit||0)+T.total)*100)/100;
+            window.HelaDB.update("customers", c.id, { credit:next });
+            window.HelaDB.log({ user:user.username, role:user.role, action:"credit_refund",
+              detail:c.name+" +"+window.HELA_DATA.fmt(T.total)+" from "+orig.invoiceNo+" → "+window.HELA_DATA.fmt(next) });
+          }
+        }
+        window.HelaDB.log({ user:user.username, role:user.role, action:"refund",
+          detail:rb.invoiceNo+" of "+orig.invoiceNo+" · "+window.HELA_DATA.fmt(T.total)+(credit?" (store credit)":"") });
+        flash(credit?"Refunded to store credit":"Refund recorded");
         return rb;
       };
 
@@ -4112,7 +4242,7 @@ counters  (name, value)
       else if (active==="cashier")   content = <CashierScreen shift={shift} user={user}
                                           onOpen={openShift} onClose={closeShift} onMove={addCashMove} />;
       else if (active==="invoices")  content = <InvoicesScreen cfg={cfg}
-                                          onRefund={(orig,lines,reason)=>requireManager("Refund "+orig.invoiceNo, ()=>refundBill(orig,lines,reason))} />;
+                                          onRefund={(orig,lines,reason,toCredit)=>requireManager("Refund "+orig.invoiceNo, ()=>refundBill(orig,lines,reason,toCredit))} />;
       else if (active==="users")     content = <UsersScreen currentUser={user} />;
       else if (active==="audit")     content = <AuditScreen />;
       else if (active==="reports")   content = <ReportsScreen cfg={cfg} />;
@@ -4149,7 +4279,7 @@ counters  (name, value)
             onConfirm={({mods,qty,note})=>{ addLine(modPick.product,{mods,qty,note}); setModPick(null); }}
             onClose={()=>setModPick(null)} />}
           {kot     && <KOTModal order={kot} onSendAndPay={onKotSend} onClose={()=>setKot(null)} />}
-          {pay     && <PaymentModal total={pay.total} onClose={()=>setPay(null)} onComplete={onPaid} />}
+          {pay     && <PaymentModal total={pay.total} customer={orderCustomer} onClose={()=>setPay(null)} onComplete={onPaid} />}
           {receipt && <ReceiptModal sale={receipt} cfg={cfg} onClose={()=>closeReceipt(false)} onNewSale={()=>closeReceipt(true)} />}
           {prodEdit && <ProductEditModal product={prodEdit.id?prodEdit:null} onSave={saveProduct} onClose={()=>setProdEdit(null)} />}
           {changePw && <ChangePasswordModal user={user} onClose={()=>setChangePw(false)} onDone={()=>{ setChangePw(false); flash("Password updated"); }} />}

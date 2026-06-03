@@ -23,7 +23,7 @@ operational feature set.
 | **Tables & Orders** | Floor‑plan with live status; orders board |
 | **Inventory** | Stock levels & adjustments, **cost price + margin**, low‑stock alerts, dish photos, add/edit products |
 | **Purchasing** | Suppliers, **goods receiving** (increases stock + updates cost), purchase‑order history |
-| **Customers** | CRM list, add/edit, **loyalty points** earned per sale |
+| **Customers** | CRM list, add/edit, **loyalty points** earned per sale, **store credit** accounts (top‑up / deduct, redeem at payment as a tender or in a split, refund‑to‑credit) |
 | **Cashier / Shifts** | Open/close **shift**, cash in/out, **X / Z report** with cash reconciliation |
 | **Reports** | Live analytics from real sales — revenue, **profit**, tax collected, COGS, payment mix, sales by category, top sellers; CSV export |
 | **Settings** | Store identity & logo, **multi‑currency** (USD / LKR / EUR / GBP / INR / AED / AUD), light/dark theme, accent colour, taxes & charges, receipt header/footer/tax‑ID |
@@ -226,7 +226,8 @@ local DB). This is exactly what the Phase‑2 WPF port and/or a backend API will
 - [x] Inventory + cost, purchasing/goods‑receiving, customers
 - [x] Barcode quick‑add, Kitchen Display System
 - [x] Item modifiers / variants (size, spice, add‑ons) with per‑product editor
-- [ ] Table merge / transfer, store credit / customer accounts
+- [x] Store credit / customer accounts (top‑up, redeem at POS, refund‑to‑credit)
+- [ ] Table merge / transfer
 - [ ] Rule‑based promotions, multi‑store + backend sync
 
 **Phase 2 — Native WPF / .NET desktop**

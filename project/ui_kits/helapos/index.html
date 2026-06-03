@@ -162,10 +162,10 @@
     /* ===== Role-based access control — roles & granular permissions ===== */
     window.HELA_ROLES = {
       admin:   { name:"Administrator", color:"#0B1E40",
-                 perms:["sell","tables","orders","inventory","inventory.edit","customers","customers.edit",
+                 perms:["sell","tables","orders","inventory","inventory.edit","purchasing","customers","customers.edit",
                         "cashier","reports","invoices","settings","users","database","audit","void","discount"] },
       manager: { name:"Manager",       color:"#0D9488",
-                 perms:["sell","tables","orders","inventory","inventory.edit","customers","customers.edit",
+                 perms:["sell","tables","orders","inventory","inventory.edit","purchasing","customers","customers.edit",
                         "cashier","reports","invoices","settings","audit","void","discount"] },
       cashier: { name:"Cashier",       color:"#1D4ED8",
                  perms:["sell","tables","orders","customers","invoices","discount"] },
@@ -185,6 +185,7 @@
       { key:"customers.edit",  label:"Add / edit customers" },
       { key:"inventory",       label:"View inventory" },
       { key:"inventory.edit",  label:"Add / edit products" },
+      { key:"purchasing",      label:"Suppliers & receiving" },
       { key:"cashier",         label:"Cashier / drawer" },
       { key:"reports",         label:"Reports & analytics" },
       { key:"settings",        label:"Settings" },
@@ -315,7 +316,7 @@
        Every screen (cart, KOT, payment, receipt, saved bill) uses it
        so the numbers always agree.
        ============================================================ */
-    window.HELA_TOTALS = function (items, cfg, orderDiscountPct) {
+    window.HELA_TOTALS = function (items, cfg, promo) {
       cfg = cfg || window.HELA_CONFIG.load();
       const r2 = (n) => Math.round(n * 100) / 100;
       const rate = (cfg.taxRate != null ? cfg.taxRate : 8) / 100;
@@ -324,7 +325,12 @@
       const gross = items.reduce((s, i) => s + i.price * i.qty, 0);
       const lineDisc = items.reduce((s, i) => s + i.price * i.qty * (i.discount || 0) / 100, 0);
       const afterLine = gross - lineDisc;
-      const orderDisc = afterLine * ((orderDiscountPct || 0) / 100);
+      // promo: a number (= percent, back-compat) or { type:'pct'|'amt', value }
+      let orderDisc = 0;
+      if (typeof promo === "number") orderDisc = afterLine * (promo / 100);
+      else if (promo && promo.type === "pct") orderDisc = afterLine * (promo.value / 100);
+      else if (promo && promo.type === "amt") orderDisc = Math.min(promo.value, afterLine);
+      orderDisc = Math.max(0, Math.min(orderDisc, afterLine));
       const net = afterLine - orderDisc;            // taxable base (excl. tax if exclusive)
       const service = net * svcR;
       let subtotal, tax, total;
@@ -349,6 +355,15 @@
         roundingAdj, total: r2(rounded),
       };
     };
+
+    /* ===== Coupons / promotions (Settings could manage these in future). ===== */
+    window.HELA_COUPONS = {
+      SAVE10:   { code:"SAVE10",   type:"pct", value:10, label:"10% off order" },
+      WELCOME5: { code:"WELCOME5", type:"amt", value:5,  label:"$5 off order"  },
+      VIP20:    { code:"VIP20",    type:"pct", value:20, label:"20% off (VIP)"  },
+      LUNCH15:  { code:"LUNCH15",  type:"pct", value:15, label:"15% lunch promo" },
+    };
+    window.HELA_COUPON = (code) => window.HELA_COUPONS[(code||"").trim().toUpperCase()] || null;
 
     /* Stock */
     const STOCK_KEY = "hela.stock.v1";
@@ -463,10 +478,10 @@
     window.HelaDB = (function () {
       const SNAP_KEY   = "hela.db.v1";       // JSON mirror snapshot
       const SQLITE_KEY = "hela.sqlite.v1";   // base64 of the SQLite file
-      const DOC_TABLES = ["users","products","customers","bills","logs","shifts"];
+      const DOC_TABLES = ["users","products","customers","bills","logs","shifts","suppliers","purchases"];
       let engine = "json";      // "sqlite" | "json"
       let SQL = null, sdb = null;
-      let mem = null;            // { users:[], products:[], customers:[], bills:[], logs:[], shifts:[], counters:{} }
+      let mem = null;            // tables: users, products, customers, bills, logs, shifts, suppliers, purchases, counters
 
       async function freshSeed() {
         const mk = async (username, pw, name, role, created) => {
@@ -486,7 +501,13 @@
           bills:     [],
           logs:      [{ id:1, ts:Date.now(), user:"system", role:"system", action:"db_init", detail:"Database created" }],
           shifts:    [],
-          counters:  { bill:483, invoice:1024 },
+          suppliers: [
+            { id:1, name:"Fresh Farms Ltd",     phone:"+94 11 234 5678", email:"sales@freshfarms.lk", terms:"Net 30" },
+            { id:2, name:"Ocean Catch Seafood", phone:"+94 11 765 4321", email:"orders@oceancatch.lk", terms:"COD" },
+            { id:3, name:"Metro Beverages",     phone:"+94 11 998 1122", email:"hello@metrobev.lk",   terms:"Net 15" },
+          ],
+          purchases: [],
+          counters:  { bill:483, invoice:1024, po:1001 },
         };
       }
 
@@ -933,11 +954,16 @@
 
     /* ───── Home / POS screen ───── */
     function HomeScreen({ cart, setCart, table, query, onProceed, orderType, setOrderType, held, onHold, onRecall,
-                          products, orderCustomer, onPickCustomer, onVoid, discountLimit=100, freeDiscount=true, requireManager, cfg }) {
+                          products, orderCustomer, onPickCustomer, onVoid, discountLimit=100, freeDiscount=true, requireManager, cfg,
+                          promo, setPromo }) {
       const D = window.HELA_DATA, fmt = D.fmt;
       const [cat, setCat] = useState("lunch");
       const [open, setOpen] = useState(null);
       const [heldOpen, setHeldOpen] = useState(false);
+      const [couponOpen, setCouponOpen] = useState(false);
+      const [couponInput, setCouponInput] = useState("");
+      const [couponErr, setCouponErr] = useState("");
+      const applyCoupon = ()=>{ const c=window.HELA_COUPON(couponInput); if(c){ setPromo(c); setCouponOpen(false); setCouponInput(""); setCouponErr(""); } else setCouponErr("Invalid coupon code."); };
       const photos = window.HELA_PHOTOS.load();
       const q = query || "";
 
@@ -956,7 +982,7 @@
       const setQty = (id,n)   => setCart((c)=>c.map((i)=>i.id===id?{...i,qty:Math.max(1,n)}:i));
       const remove = (id)     => setCart((c)=>c.filter((i)=>i.id!==id));
 
-      const T = window.HELA_TOTALS(cart, cfg);
+      const T = window.HELA_TOTALS(cart, cfg, promo);
       const payable = T.total;
 
       return (
@@ -1114,17 +1140,36 @@
             </div>
 
             {/* Add row */}
-            <div style={{display:"flex",gap:18,padding:"11px 18px",background:"var(--primary-light)",fontSize:13,fontWeight:600}}>
+            <div style={{display:"flex",gap:18,padding:"11px 18px",background:"var(--primary-light)",fontSize:13,fontWeight:600,position:"relative"}}>
               <span style={{color:"var(--text-secondary)"}}>Add</span>
-              <span style={{color:"var(--primary)",cursor:"pointer"}}>Discount</span>
-              <span style={{color:"var(--primary)",cursor:"pointer"}}>Coupon Code</span>
-              <span style={{color:"var(--primary)",cursor:"pointer"}}>Note</span>
+              <span onClick={()=>{ if(cart.length&&open==null&&cart[0]) setOpen(cart[0].id); }} style={{color:"var(--primary)",cursor:"pointer"}}>Discount</span>
+              <span onClick={()=>{ setCouponErr(""); setCouponOpen((v)=>!v); }} style={{color:"var(--primary)",cursor:"pointer"}}>Coupon Code</span>
+              <span onClick={()=>{ if(cart.length&&cart[0]) setOpen(cart[0].id); }} style={{color:"var(--primary)",cursor:"pointer"}}>Note</span>
+              {couponOpen && (
+                <div style={{position:"absolute",bottom:42,left:18,right:18,background:"var(--surface)",border:"1px solid var(--border)",
+                  borderRadius:10,boxShadow:"var(--shadow-floating)",padding:12,zIndex:30}}>
+                  <div style={{display:"flex",gap:8}}>
+                    <input value={couponInput} onChange={(e)=>setCouponInput(e.target.value)} placeholder="e.g. SAVE10"
+                      style={{flex:1,padding:"8px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text-primary)",fontFamily:"var(--font-sans)",fontSize:13,outline:"none",textTransform:"uppercase"}} />
+                    <button onClick={applyCoupon} style={{background:"var(--primary)",color:"#fff",border:"none",borderRadius:8,padding:"0 14px",cursor:"pointer",fontWeight:700,fontFamily:"var(--font-sans)"}}>Apply</button>
+                  </div>
+                  {couponErr && <div style={{color:"var(--error)",fontSize:11,marginTop:6}}>{couponErr}</div>}
+                  <div style={{fontSize:10,color:"var(--text-tertiary)",marginTop:6,fontWeight:400}}>Try: SAVE10, WELCOME5, VIP20, LUNCH15</div>
+                </div>
+              )}
             </div>
 
             {/* Totals */}
             <div style={{padding:"14px 18px",borderTop:"1px solid var(--border)"}}>
               <Tot k="Subtotal" v={fmt(T.subtotal)} />
-              {T.discount>0&&<Tot k="Discount" v={"– "+fmt(T.discount)} tone="success" />}
+              {promo && (
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,alignItems:"center"}}>
+                  <span style={{fontSize:13,color:"var(--success)"}}>🎟 {promo.code}
+                    <span onClick={()=>setPromo(null)} style={{color:"var(--text-tertiary)",cursor:"pointer",marginLeft:6}}>✕</span></span>
+                  <span style={{fontSize:13,fontWeight:600,color:"var(--success)"}}>{"– "+fmt(T.orderDiscount)}</span>
+                </div>
+              )}
+              {T.discount>0&&<Tot k="Discount (total)" v={"– "+fmt(T.discount)} tone="success" />}
               {T.service>0&&<Tot k={"Service ("+(cfg&&cfg.serviceCharge||0)+"%)"} v={fmt(T.service)} />}
               <Tot k={(cfg&&cfg.taxLabel||"Tax")+" ("+T.taxRate+"%"+(T.inclusive?" incl":"")+")"} v={fmt(T.tax)} />
               {T.roundingAdj!==0&&<Tot k="Rounding" v={(T.roundingAdj>0?"+":"")+fmt(T.roundingAdj)} />}
@@ -1349,7 +1394,7 @@
               ))}
               <div style={{color:"#9CA3AF"}}>{dash}</div>
               <Line l="Subtotal" r={fmt(sale.subtotal)} />
-              {sale.discount>0&&<Line l="Discount" r={"-"+fmt(sale.discount)} />}
+              {sale.discount>0&&<Line l={"Discount"+(sale.coupon?" ("+sale.coupon+")":"")} r={"-"+fmt(sale.discount)} />}
               {sale.service>0&&<Line l="Service" r={fmt(sale.service)} />}
               <Line l={(cfg.taxLabel||"Tax")+" ("+(sale.taxRate!=null?sale.taxRate:cfg.taxRate)+"%)"} r={fmt(sale.tax)} />
               {sale.rounding!=null&&sale.rounding!==0&&<Line l="Rounding" r={(sale.rounding>0?"+":"")+fmt(sale.rounding)} />}
@@ -2297,6 +2342,7 @@
         {icon:"🗺️",label:"Tables",     sub:"Floor plan",        id:"tables",    perm:"tables"},
         {icon:"📄",label:"Invoices",   sub:"Bill history",      id:"invoices",  perm:"invoices"},
         {icon:"📦",label:"Inventory",  sub:lowCount+" alerts",  id:"inventory", perm:"inventory", badge:lowCount||0},
+        {icon:"🚚",label:"Purchasing", sub:"Receive stock",     id:"purchasing",perm:"purchasing"},
         {icon:"📊",label:"Reports",    sub:"Analytics",         id:"reports",   perm:"reports"},
         {icon:"👥",label:"Customers",  sub:"CRM & loyalty",     id:"customers", perm:"customers"},
         {icon:"⚙️",label:"Settings",  sub:"Configure",          id:"settings",  perm:"settings"},
@@ -2950,8 +2996,10 @@
       };
 
       const tableMeta = { users:"User accounts & roles", products:"Menu items / catalogue", customers:"CRM & loyalty",
-        bills:"Saved invoices / sales", logs:"Audit / security log", counters:"Auto-increment sequences" };
-      const icons = { users:"👤", products:"🍽️", customers:"🧑‍🤝‍🧑", bills:"🧾", logs:"🔒", counters:"🔢" };
+        bills:"Saved invoices / sales", logs:"Audit / security log", shifts:"Drawer shifts / Z-reports",
+        suppliers:"Suppliers / vendors", purchases:"Goods receipts (stock in)", counters:"Auto-increment sequences" };
+      const icons = { users:"👤", products:"🍽️", customers:"🧑‍🤝‍🧑", bills:"🧾", logs:"🔒",
+        shifts:"💵", suppliers:"🚚", purchases:"📥", counters:"🔢" };
 
       return (
         <div>
@@ -3274,6 +3322,177 @@ counters  (name, value)
       );
     }
 
+    /* ───── Purchasing: suppliers + goods receiving (stock in) ───── */
+    function PurchasingScreen({ products, user }) {
+      const fmt = window.HELA_DATA.fmt;
+      const [tab, setTab] = useState("receive");
+      const [suppliers, setSuppliers] = useState(()=>window.HelaDB.all("suppliers"));
+      const [purchases, setPurchases] = useState(()=>window.HelaDB.all("purchases").slice().reverse());
+      const [supForm, setSupForm] = useState(null);
+      const refresh = ()=>{ setSuppliers(window.HelaDB.all("suppliers")); setPurchases(window.HelaDB.all("purchases").slice().reverse()); };
+
+      // receive form
+      const [supplierId, setSupplierId] = useState(suppliers[0]?suppliers[0].id:null);
+      const [lines, setLines] = useState([]);
+      const [pid, setPid] = useState(products[0]?products[0].id:"");
+      const [qty, setQty] = useState("");
+      const [cost, setCost] = useState("");
+      const addLine = () => {
+        const p = products.find((x)=>x.id===parseInt(pid)); const q=parseInt(qty)||0; const c=parseFloat(cost);
+        if(!p||q<=0) return;
+        setLines((l)=>[...l,{ id:p.id, name:p.name, qty:q, cost:isNaN(c)?(p.cost||0):c }]);
+        setQty(""); setCost("");
+      };
+      const lineTotal = lines.reduce((s,l)=>s+l.qty*l.cost,0);
+      const receive = () => {
+        if(!lines.length||!supplierId) return;
+        const sup = window.HelaDB.get("suppliers", supplierId) || {};
+        const stock = window._loadStock();
+        lines.forEach((l)=>{ stock[l.id]=(stock[l.id]||0)+l.qty;
+          const prod = window.HelaDB.get("products", l.id); if(prod) window.HelaDB.update("products", l.id, { cost:l.cost }); });
+        window._saveStock(stock);
+        const poNo = "PO-"+String(window.HelaDB.counter("po")).padStart(5,"0");
+        const now = new Date();
+        window.HelaDB.insert("purchases", { poNo, supplierId, supplier:sup.name, lines, total:Math.round(lineTotal*100)/100,
+          status:"received", date:now.toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}),
+          ts:now.getTime(), by:user?user.name:"Admin" });
+        window.HelaDB.log({ user:user.username, role:user.role, action:"goods_received", detail:poNo+" · "+sup.name+" · "+fmt(lineTotal) });
+        setLines([]); refresh(); setTab("history");
+      };
+      const saveSupplier = (data) => {
+        if (supForm && supForm.id) window.HelaDB.update("suppliers", supForm.id, data);
+        else window.HelaDB.insert("suppliers", data);
+        refresh(); setSupForm(null);
+      };
+
+      return (
+        <div>
+          <SubHeader title="Purchasing" subtitle="Suppliers & stock receiving"
+            right={<div style={{display:"flex",gap:8}}>
+              {[["receive","Receive Stock"],["suppliers","Suppliers"],["history","History"]].map(([k,l])=>(
+                <button key={k} onClick={()=>setTab(k)} style={{fontSize:13,fontWeight:600,borderRadius:16,padding:"8px 16px",border:"none",cursor:"pointer",fontFamily:"var(--font-sans)",
+                  background:tab===k?"var(--primary)":"var(--bg-secondary)",color:tab===k?"#fff":"var(--text-secondary)"}}>{l}</button>
+              ))}
+            </div>} />
+          <div style={{padding:"22px 30px"}}>
+            {tab==="receive" && (
+              <div style={{display:"grid",gridTemplateColumns:"1fr 360px",gap:16}}>
+                <Card>
+                  <div style={{fontSize:16,fontWeight:700,marginBottom:14}}>Goods Receipt — add items</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+                    <label style={{fontSize:13,fontWeight:600}}>Supplier</label>
+                    <select value={supplierId||""} onChange={(e)=>setSupplierId(parseInt(e.target.value))}
+                      style={{padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text-primary)",fontFamily:"var(--font-sans)",fontSize:14}}>
+                      {suppliers.map((s)=><option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"2fr .8fr 1fr auto",gap:8,alignItems:"end"}}>
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                      <label style={{fontSize:12,color:"var(--text-secondary)"}}>Product</label>
+                      <select value={pid} onChange={(e)=>setPid(e.target.value)}
+                        style={{padding:"9px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text-primary)",fontFamily:"var(--font-sans)",fontSize:13}}>
+                        {products.map((p)=><option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}><label style={{fontSize:12,color:"var(--text-secondary)"}}>Qty</label>
+                      <input value={qty} onChange={(e)=>setQty(e.target.value)} placeholder="0" style={{...inpStyle,width:"100%"}} /></div>
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}><label style={{fontSize:12,color:"var(--text-secondary)"}}>Unit cost</label>
+                      <input value={cost} onChange={(e)=>setCost(e.target.value)} placeholder="0.00" style={{...inpStyle,width:"100%"}} /></div>
+                    <Button onClick={addLine} style={{height:40}}>Add</Button>
+                  </div>
+                  <div style={{marginTop:16}}>
+                    {lines.length===0 ? <div style={{fontSize:13,color:"var(--text-tertiary)"}}>No lines yet.</div> :
+                      lines.map((l,i)=>(
+                      <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid var(--border)"}}>
+                        <span style={{fontSize:14}}>{l.qty} × {l.name} @ {fmt(l.cost)}</span>
+                        <span style={{display:"flex",gap:10,alignItems:"center"}}><b>{fmt(l.qty*l.cost)}</b>
+                          <button onClick={()=>setLines((a)=>a.filter((_,j)=>j!==i))} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-tertiary)"}}>✕</button></span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+                <Card style={{height:"fit-content"}}>
+                  <div style={{fontSize:16,fontWeight:700,marginBottom:12}}>Summary</div>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:8,color:"var(--text-secondary)"}}><span>Lines</span><b style={{color:"var(--text-primary)"}}>{lines.length}</b></div>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:16}}><span style={{fontWeight:700}}>Total cost</span><span style={{fontWeight:800,color:"var(--primary)"}}>{fmt(lineTotal)}</span></div>
+                  <Button full disabled={!lines.length} onClick={receive} style={{height:46}}>✓ Receive into stock</Button>
+                  <div style={{fontSize:11,color:"var(--text-tertiary)",marginTop:10}}>Increases on-hand stock and updates each product's cost price.</div>
+                </Card>
+              </div>
+            )}
+
+            {tab==="suppliers" && (
+              <div>
+                <div style={{display:"flex",justifyContent:"flex-end",marginBottom:14}}>
+                  <Button onClick={()=>setSupForm({})}>＋ Add Supplier</Button>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
+                  {suppliers.map((s)=>(
+                    <div key={s.id} style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius-lg)",padding:16,boxShadow:"var(--shadow-card)"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                        <div style={{fontWeight:700,fontSize:15}}>{s.name}</div>
+                        <button onClick={()=>setSupForm(s)} style={{...invBtn,width:30,height:30,fontSize:13}}>✏️</button>
+                      </div>
+                      <div style={{fontSize:12,color:"var(--text-secondary)",marginTop:8,lineHeight:1.8}}>
+                        <div>📞 {s.phone||"—"}</div><div>✉️ {s.email||"—"}</div>
+                        <div>Terms: <b style={{color:"var(--text-primary)"}}>{s.terms||"—"}</b></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {tab==="history" && (
+              <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:"var(--radius-lg)",overflow:"hidden",boxShadow:"var(--shadow-card)"}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1.6fr .8fr 1fr 1.4fr",padding:"12px 18px",background:"var(--bg-secondary)",fontSize:12,fontWeight:700,color:"var(--text-secondary)",borderBottom:"1px solid var(--border)"}}>
+                  <span>PO #</span><span>Supplier</span><span>Items</span><span>Total</span><span>Date</span>
+                </div>
+                {purchases.length===0 ? <div style={{padding:"40px",textAlign:"center",color:"var(--text-tertiary)",fontSize:13}}>No goods received yet.</div> :
+                  purchases.map((p,i)=>(
+                  <div key={p.id} style={{display:"grid",gridTemplateColumns:"1fr 1.6fr .8fr 1fr 1.4fr",padding:"12px 18px",fontSize:14,alignItems:"center",borderBottom:i<purchases.length-1?"1px solid var(--border)":"none"}}>
+                    <span style={{fontWeight:700,color:"var(--primary)"}}>{p.poNo}</span>
+                    <span>{p.supplier}</span>
+                    <span style={{color:"var(--text-secondary)"}}>{p.lines.reduce((s,l)=>s+l.qty,0)}</span>
+                    <span style={{fontWeight:700}}>{fmt(p.total)}</span>
+                    <span style={{color:"var(--text-tertiary)",fontSize:12}}>{p.date}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {supForm && <SupplierFormModal supplier={supForm.id?supForm:null} onSave={saveSupplier} onClose={()=>setSupForm(null)} />}
+        </div>
+      );
+    }
+
+    function SupplierFormModal({ supplier, onSave, onClose }) {
+      const [name, setName] = useState(supplier?supplier.name:"");
+      const [phone, setPhone] = useState(supplier?supplier.phone:"");
+      const [email, setEmail] = useState(supplier?supplier.email:"");
+      const [terms, setTerms] = useState(supplier?supplier.terms:"Net 30");
+      return (
+        <div style={{position:"fixed",inset:0,background:"rgba(17,24,39,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:50,padding:20}} onClick={onClose}>
+          <div onClick={(e)=>e.stopPropagation()} className="anim-slide" style={{width:420,background:"var(--bg)",borderRadius:"var(--radius-lg)",boxShadow:"var(--shadow-floating)",overflow:"hidden"}}>
+            <div style={{padding:"18px 22px",borderBottom:"1px solid var(--border)",fontSize:18,fontWeight:700}}>{supplier?"Edit Supplier":"Add Supplier"}</div>
+            <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:14}}>
+              <Field label="Supplier name" value={name} onChange={setName} placeholder="e.g. Fresh Farms Ltd" required />
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <Field label="Phone" value={phone} onChange={setPhone} />
+                <Field label="Terms" value={terms} onChange={setTerms} placeholder="Net 30" />
+              </div>
+              <Field label="Email" value={email} onChange={setEmail} />
+            </div>
+            <div style={{padding:"14px 22px",borderTop:"1px solid var(--border)",display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <Button variant="secondary" onClick={onClose}>Cancel</Button>
+              <Button disabled={!name.trim()} onClick={()=>onSave({name:name.trim(),phone:phone.trim(),email:email.trim(),terms:terms.trim()})}>Save</Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     /* ───── App shell ───── */
     // each nav item declares the permission it needs (null = always visible)
     const NAV = [
@@ -3283,6 +3502,7 @@ counters  (name, value)
       { id:"orders",    icon:"🧾", label:"Orders",     perm:"orders"     },
       { id:"invoices",  icon:"📄", label:"Invoices",   perm:"invoices"   },
       { id:"inventory", icon:"📦", label:"Inventory",  perm:"inventory"  },
+      { id:"purchasing",icon:"🚚", label:"Purchasing", perm:"purchasing" },
       { id:"customers", icon:"👥", label:"Customers",  perm:"customers"  },
       { id:"cashier",   icon:"💵", label:"Cashier",    perm:"cashier"    },
       { id:"reports",   icon:"📊", label:"Reports",    perm:"reports"    },
@@ -3324,7 +3544,7 @@ counters  (name, value)
       );
     }
 
-    function TopBar({ cfg, setCfg, query, setQuery, table, setTable, user, canSell, onLock, onChangePw, onLogout }) {
+    function TopBar({ cfg, setCfg, query, setQuery, table, setTable, user, canSell, onLock, onChangePw, onLogout, onSearch }) {
       const [openT, setOpenT] = useState(false);
       const [openU, setOpenU] = useState(false);
       const role = window.HELA_ROLES[user.role] || { name:user.role, color:"#888" };
@@ -3339,7 +3559,9 @@ counters  (name, value)
           {brand}
           <div style={{flex:1,maxWidth:380,position:"relative"}}>
             <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",color:"var(--text-tertiary)"}}>🔍</span>
-            <input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Search products....."
+            <input value={query} onChange={(e)=>setQuery(e.target.value)}
+              onKeyDown={(e)=>{ if(e.key==="Enter"&&onSearch){ onSearch(query); } }}
+              placeholder="Search or scan barcode…  (Enter to add)"
               style={{width:"100%",padding:"10px 12px 10px 40px",borderRadius:10,border:"1px solid var(--border)",
                 background:"var(--bg-secondary)",color:"var(--text-primary)",fontFamily:"var(--font-sans)",fontSize:14,outline:"none"}} />
           </div>
@@ -3428,6 +3650,7 @@ counters  (name, value)
       const [changePw, setChangePw]   = useState(false);   // change-password modal
       const [mgrAuth, setMgrAuth]     = useState(null);     // { action, onApprove } pending override
       const [shift, setShift]         = useState(()=>window.HelaDB.all("shifts").find((s)=>s.status==="open")||null);
+      const [orderPromo, setOrderPromo] = useState(null);   // applied coupon { code, type, value, label }
 
       // Apply currency synchronously during render so fmt() is correct in the SAME
       // render pass (children read window.HELA_CUR when they render, after this runs).
@@ -3472,13 +3695,21 @@ counters  (name, value)
 
       const lockNow = ()=>{ if (user) { window.HelaDB.log({ user:user.username, role:user.role, action:"lock", detail:"manual" }); setLocked(true); } };
 
-      const orderTotal = (items) => window.HELA_TOTALS(items, cfg).total;
-      const resetOrder = ()=>{ setCart([]); setTable(null); setOrderType("Dine in"); setOrderCustomer(null); };
+      const orderTotal = (items, promo) => window.HELA_TOTALS(items, cfg, promo).total;
+      const resetOrder = ()=>{ setCart([]); setTable(null); setOrderType("Dine in"); setOrderCustomer(null); setOrderPromo(null); };
+      // Barcode / SKU quick-add: resolve a scanned/typed code to a product and add it.
+      const addToCart = (p)=>{ setCart((c)=>{ const f=c.find((i)=>i.id===p.id);
+        return f ? c.map((i)=>i.id===p.id?{...i,qty:i.qty+1}:i) : [...c,{...p,qty:1,discount:0}]; }); };
+      const onSearchEnter = (qq)=>{ const s=(qq||"").trim().toLowerCase(); if(!s) return;
+        const p = products.find((x)=>(x.sku||"").toLowerCase()===s) || products.find((x)=>x.name.toLowerCase()===s)
+          || (products.filter((x)=>x.name.toLowerCase().includes(s)).length===1 ? products.find((x)=>x.name.toLowerCase().includes(s)) : null);
+        if(p){ if(!can("sell")) return; addToCart(p); setQuery(""); if(screen!=="home") setScreen("home"); flash("Added "+p.name); }
+        else flash("No product for \""+qq+"\""); };
       const onHold   = ()=>{ if (!cart.length) return;
-        setHeld((h)=>[...h,{id:Date.now(),items:cart,table,type:orderType,customer:orderCustomer,
-          total:orderTotal(cart),time:new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}]);
+        setHeld((h)=>[...h,{id:Date.now(),items:cart,table,type:orderType,customer:orderCustomer,promo:orderPromo,
+          total:orderTotal(cart,orderPromo),time:new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}]);
         resetOrder(); flash("Order held"); };
-      const onRecall = (h)=>{ setCart(h.items); setTable(h.table); setOrderType(h.type); setOrderCustomer(h.customer||null);
+      const onRecall = (h)=>{ setCart(h.items); setTable(h.table); setOrderType(h.type); setOrderCustomer(h.customer||null); setOrderPromo(h.promo||null);
         setHeld((p)=>p.filter((x)=>x.id!==h.id)); };
       const onLogin  = (u)=>{ setUser(u); setScreen("dashboard"); };
       const doLogout = (reason)=>{ window.HelaAuth.logout(user, reason); resetOrder(); setSessionWarn(false);
@@ -3490,7 +3721,7 @@ counters  (name, value)
       const onKotSend = () => { const amt = kot.total; setKot(null); setPay({ total:amt }); };
 
       const onPaid = (details) => {
-        const T = window.HELA_TOTALS(cart, cfg);
+        const T = window.HELA_TOTALS(cart, cfg, orderPromo);
         const total     = T.total;
         const billSeq   = window.HelaDB.counter("bill");
         const invSeq    = window.HelaDB.counter("invoice");
@@ -3503,7 +3734,7 @@ counters  (name, value)
           date:now.toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}),
           time:now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}), ts:now.getTime(),
           items:cart, subtotal:T.subtotal, discount:T.discount, service:T.service, tax:T.tax,
-          taxRate:T.taxRate, rounding:T.roundingAdj, total, cost:Math.round(cost*100)/100,
+          coupon:orderPromo?orderPromo.code:null, taxRate:T.taxRate, rounding:T.roundingAdj, total, cost:Math.round(cost*100)/100,
           shiftId:shift?shift.id:null, cashier:user?user.name:"Admin", ...details };
         window.HelaDB.insert("bills", sale);
         if (orderCustomer) {
@@ -3517,7 +3748,7 @@ counters  (name, value)
         setReceipt(sale);
         setPay(null);
       };
-      const closeReceipt = (again)=>{ setReceipt(null); setCart([]); setOrderType("Dine in"); setOrderCustomer(null);
+      const closeReceipt = (again)=>{ setReceipt(null); setCart([]); setOrderType("Dine in"); setOrderCustomer(null); setOrderPromo(null);
         if(!again) setTable(null); setScreen("home"); };
 
       // ----- Shift / drawer session -----
@@ -3608,6 +3839,7 @@ counters  (name, value)
       else if (active==="database")  content = <DatabaseScreen onChanged={()=>setProducts(window.HelaDB.all("products"))} />;
       else if (active==="inventory") content = <InventoryScreen products={products} canEdit={can("inventory.edit")}
                                           onAddProduct={()=>setProdEdit({})} onEditProduct={(p)=>setProdEdit(p)} />;
+      else if (active==="purchasing") content = <PurchasingScreen products={products} user={user} />;
       else if (active==="orders")    content = <OrdersScreen />;
 
       return (
@@ -3615,13 +3847,15 @@ counters  (name, value)
           <Rail screen={active} setScreen={setScreen} onLogout={logout} user={user} />
           <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0}}>
             <TopBar cfg={cfg} setCfg={setCfg} query={query} setQuery={setQuery} table={table} setTable={setTable}
-              user={user} canSell={can("sell")} onLock={lockNow} onChangePw={()=>setChangePw(true)} onLogout={logout} />
+              user={user} canSell={can("sell")} onLock={lockNow} onChangePw={()=>setChangePw(true)} onLogout={logout}
+              onSearch={onSearchEnter} />
             <div style={{flex:1,overflow:"auto",minHeight:0}}>
               {active==="home"
                 ? <HomeScreen cart={cart} setCart={setCart} table={table} query={query}
                     products={products} onProceed={onProceed} orderType={orderType}
                     setOrderType={setOrderType} held={held} onHold={onHold} onRecall={onRecall}
                     orderCustomer={orderCustomer} onPickCustomer={()=>setCustModal(true)} cfg={cfg}
+                    promo={orderPromo} setPromo={setOrderPromo}
                     onVoid={onVoid} discountLimit={cfg.discountLimit==null?100:cfg.discountLimit}
                     freeDiscount={user && (user.role==="admin"||user.role==="manager")} requireManager={requireManager} />
                 : content}

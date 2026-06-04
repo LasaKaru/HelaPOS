@@ -20,7 +20,7 @@ operational feature set.
 | **Pricing engine** | Configurable **tax rate**, **tax‑inclusive** pricing, **service charge**, **rounding** (0.05 / 0.50 / 1), line + order discounts, **coupons** (`SAVE10`, `WELCOME5`, `VIP20`, `LUNCH15`) and **rule‑based automatic promotions** (happy hour, spend / item thresholds, weekend — best match auto‑applies, configurable in Settings) |
 | **Invoices** | Every sale is saved; searchable history, reprint, CSV export, and **refunds / returns** (partial or full, manager‑approved) |
 | **Kitchen Display (KDS)** | Live ticket board — New → Preparing → Ready → Served |
-| **Tables & Orders** | Floor‑plan with live status; orders board |
+| **Tables & Orders** | Live floor‑plan backed by **open tabs**: seat a table, save/keep an order open, **resume** it later, **transfer** a tab to another table, **merge** two tables into one, then settle. Orders board shows open tabs + today's bills (open straight from either screen) |
 | **Inventory** | Stock levels & adjustments, **cost price + margin**, low‑stock alerts, dish photos, add/edit products |
 | **Purchasing** | Suppliers, **goods receiving** (increases stock + updates cost), purchase‑order history |
 | **Customers** | CRM list, add/edit, **loyalty points** earned per sale, **store credit** accounts (top‑up / deduct, redeem at payment as a tender or in a split, refund‑to‑credit) |
@@ -142,11 +142,13 @@ erDiagram
   SHIFTS     ||--o{ BILLS     : "groups"
   SUPPLIERS  ||--o{ PURCHASES : "supplies"
   PRODUCTS   ||--o{ PURCHASES : "received"
+  CUSTOMERS  ||--o{ TABS      : "optional"
 
   USERS      { int id PK  string username  string role  string salt  string hash  bool active }
-  PRODUCTS   { int id PK  string name  string cat  real price  real cost  string sku }
-  CUSTOMERS  { int id PK  string name  string phone  int visits  real spent  int points }
+  PRODUCTS   { int id PK  string name  string cat  real price  real cost  string sku  json mods }
+  CUSTOMERS  { int id PK  string name  string phone  int visits  real spent  int points  real credit }
   BILLS      { int id PK  string invoiceNo  string kind  json items  real total  string method  int shiftId }
+  TABS       { int id PK  string table  string type  json items  json customer  string status  int openedTs }
   SHIFTS     { int id PK  string status  real openFloat  json moves  real countedCash }
   SUPPLIERS  { int id PK  string name  string phone  string terms }
   PURCHASES  { int id PK  string poNo  int supplierId  json lines  real total }
@@ -228,7 +230,7 @@ local DB). This is exactly what the Phase‑2 WPF port and/or a backend API will
 - [x] Item modifiers / variants (size, spice, add‑ons) with per‑product editor
 - [x] Store credit / customer accounts (top‑up, redeem at POS, refund‑to‑credit)
 - [x] Rule‑based automatic promotions (happy hour, spend / item thresholds, weekend)
-- [ ] Table merge / transfer
+- [x] Table management — open tabs, seat / resume / **transfer** / **merge** / settle
 - [ ] Multi‑store + backend sync
 
 **Phase 2 — Native WPF / .NET desktop**

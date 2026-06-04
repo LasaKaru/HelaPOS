@@ -547,7 +547,7 @@
     window.HelaDB = (function () {
       const SNAP_KEY   = "hela.db.v1";       // JSON mirror snapshot
       const SQLITE_KEY = "hela.sqlite.v1";   // base64 of the SQLite file
-      const DOC_TABLES = ["users","products","customers","bills","logs","shifts","suppliers","purchases"];
+      const DOC_TABLES = ["users","products","customers","bills","logs","shifts","suppliers","purchases","tabs"];
       let engine = "json";      // "sqlite" | "json"
       let SQL = null, sdb = null;
       let mem = null;            // tables: users, products, customers, bills, logs, shifts, suppliers, purchases, counters
@@ -576,6 +576,22 @@
             { id:3, name:"Metro Beverages",     phone:"+94 11 998 1122", email:"hello@metrobev.lk",   terms:"Net 15" },
           ],
           purchases: [],
+          tabs:      (function(){
+            const prod=(id)=>window.HELA_DATA.products.find((p)=>p.id===id);
+            const sline=(id,qty)=>{ const p=prod(id); return { id:p.id, name:p.name, cat:p.cat, icon:p.icon, tile:p.tile,
+              basePrice:p.price, price:p.price, cost:p.cost!=null?p.cost:Math.round(p.price*0.4*100)/100,
+              qty, discount:0, note:"", mods:[], sig:p.id+"##seed", line:"seed-"+id+"-"+Math.random().toString(36).slice(2,7) }; };
+            const now=new Date();
+            const stamp=now.toLocaleString("en-GB");
+            return [
+              { id:1, table:"T2", type:"Dine in", guests:4, customer:null, promo:null, status:"open",
+                openedBy:"Admin User",    openedById:1, openedAt:stamp, openedTs:now.getTime()-38*60000,
+                items:[ sline(21,1), sline(24,1), sline(29,2) ] },
+              { id:2, table:"T6", type:"Dine in", guests:2, customer:null, promo:null, status:"open",
+                openedBy:"Front Cashier", openedById:3, openedAt:stamp, openedTs:now.getTime()-12*60000,
+                items:[ sline(15,2), sline(13,1) ] },
+            ];
+          })(),
           counters:  { bill:483, invoice:1024, po:1001 },
         };
       }
@@ -1024,7 +1040,7 @@
     /* ───── Home / POS screen ───── */
     function HomeScreen({ cart, setCart, table, query, onProceed, orderType, setOrderType, held, onHold, onRecall,
                           products, orderCustomer, onPickCustomer, onVoid, discountLimit=100, freeDiscount=true, requireManager, cfg,
-                          promo, setPromo, onAdd, autoPromo }) {
+                          promo, setPromo, onAdd, autoPromo, onSaveTab }) {
       const D = window.HELA_DATA, fmt = D.fmt;
       const [cat, setCat] = useState("lunch");
       const [open, setOpen] = useState(null);
@@ -1265,6 +1281,15 @@
                 🗑 Void
               </button>
             </div>
+            {table && (
+              <div style={{padding:"0 18px 10px"}}>
+                <button disabled={!cart.length} onClick={onSaveTab}
+                  style={{...actBtn,width:"100%",background:"var(--primary-light)",color:"var(--primary)",
+                    border:"1px solid var(--primary)",opacity:cart.length?1:.5}}>
+                  💾 Save {table} & keep open
+                </button>
+              </div>
+            )}
             <div style={{padding:"0 18px 18px"}}>
               <button disabled={!cart.length} onClick={()=>onProceed(payable)}
                 style={{...actBtn,width:"100%",background:"var(--success)",color:"#fff",opacity:cart.length?1:.5}}>
@@ -1967,141 +1992,197 @@
     }
 
     /* ───── Tables ───── */
-    const HELA_TABLES = [
-      { id:"T1", seats:2, status:"available" },
-      { id:"T2", seats:4, status:"occupied",  amount:245.00, since:"32m",    guests:3 },
-      { id:"T3", seats:4, status:"available" },
-      { id:"T4", seats:6, status:"reserved",  who:"Mr. Perera",  at:"1:30 PM" },
-      { id:"T5", seats:2, status:"occupied",  amount:63.45,  since:"12m",    guests:2 },
-      { id:"T6", seats:8, status:"billed",    amount:410.00, since:"1h 04m", guests:6 },
-      { id:"T7", seats:4, status:"available" },
-      { id:"T8", seats:4, status:"occupied",  amount:152.00, since:"48m",    guests:4 },
-      { id:"T9", seats:2, status:"available" },
-      { id:"T10",seats:6, status:"reserved",  who:"Fernando",    at:"2:00 PM" },
-      { id:"T11",seats:4, status:"occupied",  amount:88.50,  since:"20m",    guests:2 },
-      { id:"T12",seats:2, status:"available" },
+    const HELA_FLOOR = [
+      { id:"T1", seats:2 }, { id:"T2", seats:4 }, { id:"T3", seats:4 }, { id:"T4", seats:6 },
+      { id:"T5", seats:2 }, { id:"T6", seats:8 }, { id:"T7", seats:4 }, { id:"T8", seats:4 },
+      { id:"T9", seats:2 }, { id:"T10",seats:6 }, { id:"T11",seats:4 }, { id:"T12",seats:2 },
     ];
     const T_STATUS = {
-      available:{ label:"Available", color:"var(--success)",       soft:"rgba(16,185,129,.10)" },
-      occupied: { label:"Occupied",  color:"var(--primary)",       soft:"var(--primary-light)"  },
-      reserved: { label:"Reserved",  color:"var(--info)",          soft:"rgba(59,130,246,.10)" },
-      billed:   { label:"Billed",    color:"var(--text-tertiary)", soft:"var(--bg-tertiary)"   },
+      available:{ label:"Available", color:"var(--success)", soft:"rgba(16,185,129,.10)" },
+      occupied: { label:"Occupied",  color:"var(--primary)", soft:"var(--primary-light)"  },
     };
+    const tabElapsed = (ts)=>{ if(!ts) return ""; const m=Math.floor((Date.now()-ts)/60000);
+      return m<1?"just now":m<60?m+"m":Math.floor(m/60)+"h "+(m%60)+"m"; };
+    const tabTotal = (tab, cfg)=>window.HELA_TOTALS(tab.items||[], cfg, tab.promo).total;
 
-    function TablesScreen({ onSelectTable }) {
+    function TablesScreen({ cfg, activeTab, onSeat, onOpen, onTransfer, onMerge }) {
       const fmt = window.HELA_DATA.fmt;
+      const [tabs, setTabs] = useState(()=>window.HelaDB.all("tabs").filter((t)=>t.status!=="closed"));
       const [filter, setFilter] = useState("all");
-      const list = filter==="all" ? HELA_TABLES : HELA_TABLES.filter((t)=>t.status===filter);
+      const [move, setMove] = useState(null);   // { kind:"transfer"|"merge", tab }
+      const refresh = ()=>setTabs(window.HelaDB.all("tabs").filter((t)=>t.status!=="closed"));
+      const tabFor = (id)=>tabs.find((t)=>t.table===id);
+      const occupied = tabs.length, free = HELA_FLOOR.length - occupied;
+
+      const doTransfer = (dest)=>{ onTransfer(move.tab, dest); setMove(null); setTimeout(refresh,40); };
+      const doMerge = (destTab)=>{ onMerge(move.tab, destTab); setMove(null); setTimeout(refresh,40); };
+
+      let floor = HELA_FLOOR.map((f)=>({ ...f, tab:tabFor(f.id) }));
+      if (filter==="available") floor = floor.filter((f)=>!f.tab);
+      if (filter==="occupied")  floor = floor.filter((f)=>f.tab);
+
       return (
         <div>
-          <SubHeader title="Tables" subtitle="Floor plan · live status"
-            right={<div style={{display:"flex",gap:14,fontSize:12,color:"var(--text-secondary)"}}>
+          <SubHeader title="Tables" subtitle={occupied+" occupied · "+free+" available"}
+            right={<div style={{display:"flex",gap:14,fontSize:12,color:"var(--text-secondary)",alignItems:"center"}}>
               {Object.keys(T_STATUS).map((k)=>(
                 <span key={k} style={{display:"flex",alignItems:"center",gap:6}}>
                   <span style={{width:10,height:10,borderRadius:3,background:T_STATUS[k].color}} />{T_STATUS[k].label}
                 </span>
               ))}
+              <button onClick={refresh} style={{background:"var(--bg-secondary)",border:"1px solid var(--border)",borderRadius:10,
+                padding:"8px 14px",cursor:"pointer",fontFamily:"var(--font-sans)",fontSize:12,fontWeight:600,color:"var(--text-primary)"}}>↻ Refresh</button>
             </div>} />
           <div style={{padding:"22px 30px"}}>
             <div style={{display:"flex",gap:8,marginBottom:20}}>
-              {["all","available","occupied","reserved","billed"].map((f)=>(
+              {["all","available","occupied"].map((f)=>(
                 <button key={f} onClick={()=>setFilter(f)} style={{fontSize:13,fontWeight:600,borderRadius:16,
                   padding:"8px 16px",border:"none",cursor:"pointer",textTransform:"capitalize",fontFamily:"var(--font-sans)",
                   background:filter===f?"var(--primary)":"var(--bg-secondary)",
-                  color:filter===f?"#fff":"var(--text-secondary)"}}>
-                  {f}
-                </button>
+                  color:filter===f?"#fff":"var(--text-secondary)"}}>{f}</button>
               ))}
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:16}}>
-              {list.map((t)=>{
-                const s = T_STATUS[t.status];
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))",gap:16}}>
+              {floor.map((f)=>{
+                const occ = !!f.tab;
+                const s = T_STATUS[occ?"occupied":"available"];
+                const isActive = occ && f.tab.id===activeTab;
                 return (
-                  <div key={t.id} onClick={()=>t.status==="available"&&onSelectTable(t.id)}
-                    style={{background:"var(--surface)",border:"1px solid var(--border)",
-                      borderTop:"4px solid "+s.color,borderRadius:"var(--radius-lg)",padding:16,
-                      boxShadow:"var(--shadow-card)",cursor:t.status==="available"?"pointer":"default"}}>
+                  <div key={f.id}
+                    style={{background:"var(--surface)",border:"1px solid "+(isActive?"var(--primary)":"var(--border)"),
+                      borderTop:"4px solid "+s.color,borderRadius:"var(--radius-lg)",padding:16,boxShadow:"var(--shadow-card)"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <span style={{fontSize:22,fontWeight:800}}>{t.id}</span>
-                      <span style={{fontSize:11,fontWeight:700,color:s.color,background:s.soft,borderRadius:20,padding:"4px 10px"}}>{s.label}</span>
+                      <span style={{fontSize:22,fontWeight:800}}>{f.id}</span>
+                      <span style={{fontSize:11,fontWeight:700,color:s.color,background:s.soft,borderRadius:20,padding:"4px 10px"}}>
+                        {isActive?"In POS":s.label}</span>
                     </div>
-                    <div style={{fontSize:12,color:"var(--text-secondary)",marginTop:6}}>🪑 {t.seats} seats</div>
+                    <div style={{fontSize:12,color:"var(--text-secondary)",marginTop:6}}>🪑 {f.seats} seats</div>
                     <div style={{height:1,background:"var(--border)",margin:"12px 0"}} />
-                    {t.status==="occupied"&&<div style={{fontSize:12,color:"var(--text-secondary)"}}>
-                      <div>{t.guests} guests · {t.since}</div>
-                      <div style={{fontSize:17,fontWeight:700,color:"var(--text-primary)",marginTop:2}}>{fmt(t.amount)}</div>
-                    </div>}
-                    {t.status==="billed"&&<div style={{fontSize:12,color:"var(--text-secondary)"}}>
-                      Awaiting payment<div style={{fontSize:17,fontWeight:700,color:"var(--text-primary)",marginTop:2}}>{fmt(t.amount)}</div>
-                    </div>}
-                    {t.status==="reserved"&&<div style={{fontSize:12,color:"var(--text-secondary)"}}>
-                      {t.who}<div style={{marginTop:2}}>⏰ {t.at}</div>
-                    </div>}
-                    {t.status==="available"&&<div style={{fontSize:12,color:"var(--success)",fontWeight:600}}>Tap to seat →</div>}
+                    {occ ? (
+                      <React.Fragment>
+                        <div style={{fontSize:12,color:"var(--text-secondary)"}}>
+                          {(f.tab.items||[]).reduce((s2,i)=>s2+i.qty,0)} items · {tabElapsed(f.tab.openedTs)}
+                          <div style={{fontSize:11,color:"var(--text-tertiary)"}}>{f.tab.openedBy}</div>
+                          <div style={{fontSize:18,fontWeight:800,color:"var(--text-primary)",marginTop:4}}>{fmt(tabTotal(f.tab,cfg))}</div>
+                        </div>
+                        <div style={{display:"flex",gap:6,marginTop:12,flexWrap:"wrap"}}>
+                          <button onClick={()=>onOpen(f.tab)} style={tblBtn("var(--primary)","#fff")}>Open</button>
+                          <button onClick={()=>setMove({kind:"transfer",tab:f.tab})} style={tblBtn("var(--surface)","var(--text-primary)",true)}>Transfer</button>
+                          <button onClick={()=>setMove({kind:"merge",tab:f.tab})} style={tblBtn("var(--surface)","var(--text-primary)",true)}>Merge</button>
+                        </div>
+                      </React.Fragment>
+                    ) : (
+                      <button onClick={()=>onSeat(f.id)} style={{...tblBtn("var(--success)","#fff"),width:"100%"}}>＋ Seat / New order</button>
+                    )}
                   </div>
                 );
               })}
             </div>
           </div>
+
+          {move && (
+            <div style={{position:"fixed",inset:0,background:"rgba(17,24,39,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:55,padding:20}} onClick={()=>setMove(null)}>
+              <div onClick={(e)=>e.stopPropagation()} className="anim-slide" style={{width:440,background:"var(--bg)",borderRadius:"var(--radius-lg)",boxShadow:"var(--shadow-floating)",overflow:"hidden"}}>
+                <div style={{padding:"18px 22px",borderBottom:"1px solid var(--border)"}}>
+                  <div style={{fontSize:18,fontWeight:700}}>{move.kind==="transfer"?"Transfer":"Merge"} · {move.tab.table}</div>
+                  <div style={{fontSize:13,color:"var(--text-secondary)",marginTop:2}}>
+                    {move.kind==="transfer" ? "Move this tab to an empty table." : "Combine this tab into another open table."}
+                  </div>
+                </div>
+                <div style={{padding:"14px 22px",maxHeight:340,overflow:"auto"}}>
+                  {move.kind==="transfer"
+                    ? HELA_FLOOR.filter((f)=>!tabFor(f.id) && f.id!==move.tab.table).map((f)=>(
+                        <button key={f.id} onClick={()=>doTransfer(f.id)} style={moveRow}>
+                          <span style={{fontWeight:700}}>{f.id}</span><span style={{fontSize:12,color:"var(--text-secondary)"}}>🪑 {f.seats} seats</span>
+                        </button>
+                      ))
+                    : tabs.filter((t)=>t.id!==move.tab.id).map((t)=>(
+                        <button key={t.id} onClick={()=>doMerge(t)} style={moveRow}>
+                          <span style={{fontWeight:700}}>{t.table}</span>
+                          <span style={{fontSize:12,color:"var(--text-secondary)"}}>{(t.items||[]).reduce((s2,i)=>s2+i.qty,0)} items · {fmt(tabTotal(t,cfg))}</span>
+                        </button>
+                      ))}
+                  {(move.kind==="transfer" ? HELA_FLOOR.filter((f)=>!tabFor(f.id) && f.id!==move.tab.table).length===0
+                                           : tabs.filter((t)=>t.id!==move.tab.id).length===0) &&
+                    <div style={{padding:"18px",textAlign:"center",color:"var(--text-tertiary)",fontSize:13}}>
+                      {move.kind==="transfer"?"No empty tables available.":"No other open tabs to merge into."}</div>}
+                </div>
+                <div style={{padding:"14px 22px",borderTop:"1px solid var(--border)",display:"flex",justifyContent:"flex-end"}}>
+                  <Button variant="secondary" onClick={()=>setMove(null)}>Cancel</Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       );
     }
+    const tblBtn = (bg,col,border)=>({ flex:1,padding:"8px 10px",borderRadius:8,cursor:"pointer",fontFamily:"var(--font-sans)",
+      fontSize:12.5,fontWeight:700,background:bg,color:col,border:border?"1px solid var(--border)":"none" });
+    const moveRow = { width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px",
+      borderRadius:10,border:"1px solid var(--border)",background:"var(--surface)",cursor:"pointer",marginBottom:8,
+      fontFamily:"var(--font-sans)",color:"var(--text-primary)" };
 
-    /* ───── Orders ───── */
-    const HELA_ORDERS = [
-      { no:"ORD-00482", table:"T2",  type:"Dine in",  items:6, amount:245.00, status:"Preparing", time:"10:24" },
-      { no:"ORD-00481", table:"—",   type:"Takeaway", items:2, amount:88.50,  status:"Served",    time:"10:19" },
-      { no:"ORD-00480", table:"T8",  type:"Dine in",  items:4, amount:152.00, status:"Served",    time:"10:11" },
-      { no:"ORD-00479", table:"T5",  type:"Dine in",  items:3, amount:63.45,  status:"Paid",      time:"10:03" },
-      { no:"ORD-00478", table:"—",   type:"Takeaway", items:5, amount:131.20, status:"Paid",      time:"09:58" },
-      { no:"ORD-00477", table:"T6",  type:"Dine in",  items:9, amount:410.00, status:"Preparing", time:"09:46" },
-      { no:"ORD-00476", table:"T11", type:"Dine in",  items:2, amount:88.50,  status:"Paid",      time:"09:32" },
-    ];
-    const O_STATUS = {
-      Preparing:{ color:"var(--info)",          soft:"rgba(59,130,246,.10)" },
-      Served:   { color:"var(--success)",        soft:"rgba(16,185,129,.10)" },
-      Paid:     { color:"var(--text-secondary)", soft:"var(--bg-tertiary)"  },
-    };
-
-    function OrdersScreen() {
+    /* ───── Orders (live: open tabs + today's bills) ───── */
+    function OrdersScreen({ cfg, activeTab, onOpen }) {
       const fmt = window.HELA_DATA.fmt;
-      const [tab, setTab] = useState("All");
-      const list = tab==="All" ? HELA_ORDERS
-        : tab==="Paid"   ? HELA_ORDERS.filter((o)=>o.status==="Paid")
-        : HELA_ORDERS.filter((o)=>o.type===tab);
+      const [tab, setTab] = useState("Open");
+      const [tick, setTick] = useState(0);
+      const refresh = ()=>setTick((t)=>t+1);
+      const openTabs = window.HelaDB.all("tabs").filter((t)=>t.status!=="closed");
+      const today = new Date(); today.setHours(0,0,0,0);
+      const bills = window.HelaDB.all("bills").filter((b)=>(b.ts||0)>=today.getTime()).slice().reverse();
+
+      const rows = tab==="Open"
+        ? openTabs.map((t)=>({ key:"tab"+t.id, ref:"OPEN · "+t.table, table:t.table, type:t.type||"Dine in",
+            items:(t.items||[]).reduce((s,i)=>s+i.qty,0), amount:tabTotal(t,cfg), status:"Open",
+            time:tabElapsed(t.openedTs), tabObj:t }))
+        : bills.filter((b)=> tab==="All" ? true : tab==="Refunds" ? b.kind==="refund" : b.kind!=="refund")
+            .map((b)=>({ key:"bill"+b.id, ref:b.invoiceNo||b.no, table:b.table||"—", type:b.type||"—",
+              items:(b.items||[]).reduce((s,i)=>s+i.qty,0), amount:b.total, status:b.kind==="refund"?"Refunded":"Paid",
+              time:b.time||"" }));
+
+      const STAT = { Open:{c:"var(--info)",s:"rgba(59,130,246,.10)"}, Paid:{c:"var(--success)",s:"rgba(16,185,129,.10)"},
+        Refunded:{c:"var(--error)",s:"rgba(239,68,68,.10)"} };
+
       return (
         <div>
-          <SubHeader title="Orders" subtitle="Today · 7 orders" />
+          <SubHeader title="Orders" subtitle={openTabs.length+" open · "+bills.filter((b)=>b.kind!=="refund").length+" billed today"}
+            right={<button onClick={refresh} style={{background:"var(--bg-secondary)",border:"1px solid var(--border)",borderRadius:10,
+              padding:"9px 16px",cursor:"pointer",fontFamily:"var(--font-sans)",fontSize:13,fontWeight:600,color:"var(--text-primary)"}}>↻ Refresh</button>} />
           <div style={{padding:"22px 30px"}}>
             <div style={{display:"flex",gap:8,marginBottom:18}}>
-              {["All","Dine in","Takeaway","Paid"].map((f)=>(
+              {["Open","All","Refunds"].map((f)=>(
                 <button key={f} onClick={()=>setTab(f)} style={{fontSize:13,fontWeight:600,borderRadius:16,
                   padding:"8px 16px",border:"none",cursor:"pointer",fontFamily:"var(--font-sans)",
                   background:tab===f?"var(--primary)":"var(--bg-secondary)",color:tab===f?"#fff":"var(--text-secondary)"}}>
-                  {f}
+                  {f==="All"?"Billed today":f}
                 </button>
               ))}
             </div>
             <div style={{background:"var(--surface)",border:"1px solid var(--border)",
               borderRadius:"var(--radius-lg)",overflow:"hidden",boxShadow:"var(--shadow-card)"}}>
-              <div style={{display:"grid",gridTemplateColumns:"1.3fr .8fr 1fr .7fr 1fr 1fr .8fr",
+              <div style={{display:"grid",gridTemplateColumns:"1.3fr .8fr 1fr .7fr 1fr 1fr .9fr",
                 padding:"12px 18px",background:"var(--bg-secondary)",fontSize:12,fontWeight:700,
                 color:"var(--text-secondary)",borderBottom:"1px solid var(--border)"}}>
-                <span>Order</span><span>Table</span><span>Type</span><span>Items</span><span>Amount</span><span>Status</span><span>Time</span>
+                <span>Reference</span><span>Table</span><span>Type</span><span>Items</span><span>Amount</span><span>Status</span><span>{tab==="Open"?"Action":"Time"}</span>
               </div>
-              {list.map((o,idx)=>{
-                const s = O_STATUS[o.status];
+              {rows.length===0 && <div style={{padding:"30px",textAlign:"center",color:"var(--text-tertiary)",fontSize:13}}>Nothing here yet.</div>}
+              {rows.map((o,idx)=>{
+                const s = STAT[o.status]||STAT.Paid;
+                const isActive = o.tabObj && o.tabObj.id===activeTab;
                 return (
-                  <div key={o.no} style={{display:"grid",gridTemplateColumns:"1.3fr .8fr 1fr .7fr 1fr 1fr .8fr",
-                    padding:"14px 18px",fontSize:14,alignItems:"center",
-                    borderBottom:idx<list.length-1?"1px solid var(--border)":"none"}}>
-                    <span style={{fontWeight:700}}>{o.no}</span>
+                  <div key={o.key} style={{display:"grid",gridTemplateColumns:"1.3fr .8fr 1fr .7fr 1fr 1fr .9fr",
+                    padding:"13px 18px",fontSize:14,alignItems:"center",
+                    borderBottom:idx<rows.length-1?"1px solid var(--border)":"none"}}>
+                    <span style={{fontWeight:700}}>{o.ref}</span>
                     <span style={{color:o.table==="—"?"var(--text-tertiary)":"var(--primary)",fontWeight:600}}>{o.table}</span>
                     <span style={{color:"var(--text-secondary)"}}>{o.type}</span>
                     <span style={{color:"var(--text-secondary)"}}>{o.items}</span>
                     <span style={{fontWeight:700}}>{fmt(o.amount)}</span>
-                    <span><span style={{fontSize:12,fontWeight:700,color:s.color,background:s.soft,borderRadius:20,padding:"4px 12px"}}>{o.status}</span></span>
-                    <span style={{color:"var(--text-secondary)"}}>{o.time}</span>
+                    <span><span style={{fontSize:12,fontWeight:700,color:s.c,background:s.s,borderRadius:20,padding:"4px 12px"}}>{isActive?"In POS":o.status}</span></span>
+                    {o.tabObj
+                      ? <button onClick={()=>onOpen(o.tabObj)} style={{...tblBtn("var(--primary)","#fff"),padding:"6px 12px",flex:"none"}}>Open</button>
+                      : <span style={{color:"var(--text-secondary)"}}>{o.time}</span>}
                   </div>
                 );
               })}
@@ -4111,6 +4192,7 @@ counters  (name, value)
       const [shift, setShift]         = useState(()=>window.HelaDB.all("shifts").find((s)=>s.status==="open")||null);
       const [orderPromo, setOrderPromo] = useState(null);   // applied coupon { code, type, value, label }
       const [modPick, setModPick]     = useState(null);     // { product } pending modifier selection
+      const [activeTab, setActiveTab] = useState(null);     // id of the open table tab loaded into the POS
 
       // Apply currency synchronously during render so fmt() is correct in the SAME
       // render pass (children read window.HELA_CUR when they render, after this runs).
@@ -4158,7 +4240,44 @@ counters  (name, value)
       const orderTotal = (items, promo) => window.HELA_TOTALS(items, cfg, promo).total;
       // Best auto-promotion for the current cart (suppressed when a manual coupon is set).
       const autoPromo = orderPromo ? null : window.HELA_AUTOPROMO(cart, cfg);
-      const resetOrder = ()=>{ setCart([]); setTable(null); setOrderType("Dine in"); setOrderCustomer(null); setOrderPromo(null); };
+      const resetOrder = ()=>{ setCart([]); setTable(null); setOrderType("Dine in"); setOrderCustomer(null); setOrderPromo(null); setActiveTab(null); };
+
+      // ----- Table tabs (open orders tied to a table) -----
+      // Upsert the current POS order onto its table's tab (one tab per table, always).
+      const upsertCurrentTab = ()=>{
+        if (!table || !cart.length) return null;
+        const data = { table, type:orderType, customer:orderCustomer, promo:orderPromo, items:cart, status:"open" };
+        const existing = (activeTab && window.HelaDB.get("tabs", activeTab)) ? activeTab
+          : (window.HelaDB.all("tabs").find((t)=>t.table===table && t.status!=="closed")||{}).id || null;
+        if (existing) { window.HelaDB.update("tabs", existing, data); return existing; }
+        const now=new Date();
+        const t = window.HelaDB.insert("tabs", { ...data, guests:null, openedBy:user?user.name:"Admin",
+          openedById:user?user.id:null, openedAt:now.toLocaleString("en-GB"), openedTs:now.getTime() });
+        return t.id;
+      };
+      const stashCurrent = ()=>{ upsertCurrentTab(); };
+      const loadTab = (t)=>{ stashCurrent(); const f = window.HelaDB.get("tabs", t.id) || t;
+        setCart(f.items||[]); setTable(f.table); setOrderType(f.type||"Dine in");
+        setOrderCustomer(f.customer||null); setOrderPromo(f.promo||null); setActiveTab(f.id); setScreen("home");
+        flash("Opened "+f.table); };
+      const seatTable = (tableId)=>{ stashCurrent(); setCart([]); setTable(tableId); setOrderType("Dine in");
+        setOrderCustomer(null); setOrderPromo(null); setActiveTab(null); setScreen("home"); flash("Seated "+tableId); };
+      const saveTab = ()=>{
+        if (!table || !cart.length) { flash("Pick a table and add items first"); return; }
+        upsertCurrentTab();
+        if (user) window.HelaDB.log({ user:user.username, role:user.role, action:"tab_save", detail:table+" · "+cart.length+" line(s)" });
+        flash("Table "+table+" saved"); resetOrder(); setScreen("tables");
+      };
+      const transferTab = (t, dest)=>{ window.HelaDB.update("tabs", t.id, { table:dest });
+        if (activeTab===t.id) setTable(dest);
+        if (user) window.HelaDB.log({ user:user.username, role:user.role, action:"tab_transfer", detail:t.table+" → "+dest });
+        flash("Transferred "+t.table+" → "+dest); };
+      const mergeTabs = (src, dest)=>{ const merged=[...(dest.items||[]),...(src.items||[])];
+        window.HelaDB.update("tabs", dest.id, { items:merged }); window.HelaDB.remove("tabs", src.id);
+        if (activeTab===src.id) { setActiveTab(dest.id); setTable(dest.table); setCart(merged); }
+        else if (activeTab===dest.id) setCart(merged);
+        if (user) window.HelaDB.log({ user:user.username, role:user.role, action:"tab_merge", detail:src.table+" → "+dest.table });
+        flash("Merged "+src.table+" into "+dest.table); };
       // Add a product to the cart. Modifier selections become a distinct line; their
       // upcharge is baked into the line's unit price so HELA_TOTALS works unchanged.
       // Identical lines (same product + mods + note) merge by quantity.
@@ -4220,6 +4339,7 @@ counters  (name, value)
           taxRate:T.taxRate, rounding:T.roundingAdj, total, cost:Math.round(cost*100)/100,
           shiftId:shift?shift.id:null, cashier:user?user.name:"Admin", ...details };
         window.HelaDB.insert("bills", sale);
+        if (activeTab && window.HelaDB.get("tabs", activeTab)) window.HelaDB.remove("tabs", activeTab);   // tab settled
         if (orderCustomer) {
           const c = window.HelaDB.get("customers", orderCustomer.id);
           if (c) {
@@ -4316,7 +4436,9 @@ counters  (name, value)
         else setMgrAuth({ action, onApprove:(mgr)=>{ setMgrAuth(null); fn(mgr); } });
       };
       const onVoid = () => { if (!cart.length) return;
-        requireManager("Voiding the current order", ()=>{ resetOrder(); flash("Order voided"); }); };
+        requireManager("Voiding the current order", ()=>{
+          if (activeTab && window.HelaDB.get("tabs", activeTab)) window.HelaDB.remove("tabs", activeTab);
+          resetOrder(); flash("Order voided"); }); };
 
       if (screen==="login") return <LoginScreen cfg={cfg} onLogin={onLogin} />;
 
@@ -4329,7 +4451,8 @@ counters  (name, value)
       if      (active==="dashboard") content = <DashboardScreen onNavigate={setScreen} user={user} />;
       else if (active==="settings")  content = <SettingsScreen cfg={cfg} setCfg={setCfg} onChangePassword={()=>setChangePw(true)} />;
       else if (active==="customers") content = <CustomersScreen canEdit={can("customers.edit")} />;
-      else if (active==="tables")    content = <TablesScreen onSelectTable={(t)=>{setTable(t);setScreen("home");}} />;
+      else if (active==="tables")    content = <TablesScreen cfg={cfg} activeTab={activeTab}
+                                          onSeat={seatTable} onOpen={loadTab} onTransfer={transferTab} onMerge={mergeTabs} />;
       else if (active==="cashier")   content = <CashierScreen shift={shift} user={user}
                                           onOpen={openShift} onClose={closeShift} onMove={addCashMove} />;
       else if (active==="invoices")  content = <InvoicesScreen cfg={cfg}
@@ -4342,7 +4465,7 @@ counters  (name, value)
                                           onAddProduct={()=>setProdEdit({})} onEditProduct={(p)=>setProdEdit(p)} />;
       else if (active==="purchasing") content = <PurchasingScreen products={products} user={user} />;
       else if (active==="kitchen")   content = <KitchenScreen />;
-      else if (active==="orders")    content = <OrdersScreen />;
+      else if (active==="orders")    content = <OrdersScreen cfg={cfg} activeTab={activeTab} onOpen={loadTab} />;
 
       return (
         <div style={{height:"100vh",display:"flex",background:"var(--bg)"}}>
@@ -4357,7 +4480,7 @@ counters  (name, value)
                     products={products} onProceed={onProceed} orderType={orderType}
                     setOrderType={setOrderType} held={held} onHold={onHold} onRecall={onRecall}
                     orderCustomer={orderCustomer} onPickCustomer={()=>setCustModal(true)} cfg={cfg}
-                    promo={orderPromo} setPromo={setOrderPromo} onAdd={requestAdd} autoPromo={autoPromo}
+                    promo={orderPromo} setPromo={setOrderPromo} onAdd={requestAdd} autoPromo={autoPromo} onSaveTab={saveTab}
                     onVoid={onVoid} discountLimit={cfg.discountLimit==null?100:cfg.discountLimit}
                     freeDiscount={user && (user.role==="admin"||user.role==="manager")} requireManager={requireManager} />
                 : content}

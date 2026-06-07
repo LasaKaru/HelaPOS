@@ -1040,7 +1040,7 @@
     /* ───── Home / POS screen ───── */
     function HomeScreen({ cart, setCart, table, query, onProceed, orderType, setOrderType, held, onHold, onRecall,
                           products, orderCustomer, onPickCustomer, onVoid, discountLimit=100, freeDiscount=true, requireManager, cfg,
-                          promo, setPromo, onAdd, autoPromo, onSaveTab }) {
+                          promo, setPromo, onAdd, autoPromo, onSaveTab, onSplit }) {
       const D = window.HELA_DATA, fmt = D.fmt;
       const [cat, setCat] = useState("lunch");
       const [open, setOpen] = useState(null);
@@ -1290,9 +1290,14 @@
                 </button>
               </div>
             )}
-            <div style={{padding:"0 18px 18px"}}>
+            <div style={{display:"flex",gap:10,padding:"0 18px 18px"}}>
+              <button disabled={!cart.length} onClick={onSplit}
+                style={{...actBtn,flex:"0 0 34%",background:"var(--bg-secondary)",color:"var(--text-primary)",
+                  border:"1px solid var(--border)",opacity:cart.length?1:.5}}>
+                🔀 Split
+              </button>
               <button disabled={!cart.length} onClick={()=>onProceed(payable)}
-                style={{...actBtn,width:"100%",background:"var(--success)",color:"#fff",opacity:cart.length?1:.5}}>
+                style={{...actBtn,flex:1,background:"var(--success)",color:"#fff",opacity:cart.length?1:.5}}>
                 ✓ Proceed to Pay
               </button>
             </div>
@@ -1302,7 +1307,7 @@
     }
 
     /* ───── Payment modal ───── */
-    function PaymentModal({ total, customer, onClose, onComplete }) {
+    function PaymentModal({ total, customer, onClose, onComplete, caption }) {
       const fmt = window.HELA_DATA.fmt;
       // Fresh store-credit balance for the order's customer (if any).
       const credit = customer ? ((window.HelaDB.get("customers", customer.id)||customer).credit||0) : 0;
@@ -1358,7 +1363,8 @@
                     display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <div>
                       <div style={{fontSize:22,fontWeight:700}}>Process Payment</div>
-                      <div style={{fontSize:13,color:"var(--text-secondary)",marginTop:2}}>Select method and enter details</div>
+                      <div style={{fontSize:13,color:caption?"var(--primary)":"var(--text-secondary)",marginTop:2,fontWeight:caption?700:400}}>
+                        {caption || "Select method and enter details"}</div>
                     </div>
                     <div style={{background:"var(--primary)",color:"#fff",borderRadius:8,padding:"8px 16px",textAlign:"center"}}>
                       <div style={{fontSize:11}}>Amount Due</div>
@@ -1539,7 +1545,12 @@
               {sale.rounding!=null&&sale.rounding!==0&&<Line l="Rounding" r={(sale.rounding>0?"+":"")+fmt(sale.rounding)} />}
               <Line l="TOTAL" r={fmt(sale.total)} bold />
               <div style={{color:"#9CA3AF"}}>{dash}</div>
-              {sale.tenders
+              {sale.splitInfo
+                ? <React.Fragment>
+                    <Line l={"Split into "+sale.splitInfo.parts} r="" />
+                    {sale.splitInfo.bills.map((b,i)=><Line key={i} l={"  "+b.invoiceNo+" ("+b.method+")"} r={fmt(b.total)} />)}
+                  </React.Fragment>
+                : sale.tenders
                 ? sale.tenders.map((t,i)=><Line key={i} l={"Paid ("+t.method+")"} r={fmt(t.amount)} />)
                 : <Line l={"Paid ("+sale.method+")"} r={fmt(sale.method==="Cash"?(sale.tendered||sale.total):sale.total)} />}
               {sale.method==="Cash"&&sale.change>0&&<Line l="Change" r={fmt(sale.change)} />}
@@ -2864,6 +2875,142 @@
       );
     }
 
+    /* ───── Split bill — divide a check into separate bills (evenly or by item) ───── */
+    function SplitBillModal({ cart, cfg, orderPromo, onClose, onConfirm }) {
+      const fmt = window.HELA_DATA.fmt;
+      const round = (x)=>Math.round(x*100)/100;
+      const [mode, setMode]     = useState("even");
+      const [n, setN]           = useState(2);
+      const [guests, setGuests] = useState(2);
+      const [assign, setAssign] = useState(()=>cart.map(()=>1));   // 1-based guest per cart line
+      const blocked = !!orderPromo;                                // coupons can't combine with splits
+      const whole = window.HELA_TOTALS(cart, cfg, null);
+      const lineGross = (i)=>round(i.price*i.qty*(1-(i.discount||0)/100));
+
+      const evenParts = ()=>{
+        const cents=Math.round(whole.total*100), base=Math.floor(cents/n), rem=cents-base*n;
+        return Array.from({length:n},(_,i)=>{
+          const total=(base+(i<rem?1:0))/100, f=whole.total?total/whole.total:1/n;
+          return { label:"Share "+(i+1)+" of "+n, splitLabel:(i+1)+"/"+n, items:[],
+            subtotal:round(whole.subtotal*f), discount:round(whole.discount*f), service:round(whole.service*f),
+            tax:round(whole.tax*f), taxRate:whole.taxRate, rounding:0, total, earn:i===0 };
+        });
+      };
+      const guestOf = (idx)=>Math.min(assign[idx]||1, guests);
+      const itemParts = ()=>{
+        const out=[]; let earned=false;
+        for(let g=1; g<=guests; g++){
+          const it = cart.filter((_,idx)=>guestOf(idx)===g);
+          if(!it.length) continue;
+          const T = window.HELA_TOTALS(it, cfg, null);
+          out.push({ label:"Guest "+g, splitLabel:"G"+g, items:it, subtotal:T.subtotal, discount:T.discount,
+            service:T.service, tax:T.tax, taxRate:T.taxRate, rounding:T.roundingAdj, total:T.total, earn:!earned });
+          earned=true;
+        }
+        return out;
+      };
+      const parts = mode==="even" ? evenParts() : itemParts();
+      const sum   = round(parts.reduce((s,p)=>s+p.total,0));
+      const ready = !blocked && parts.length>=2;
+
+      const setLine = (idx,g)=>setAssign((a)=>a.map((v,j)=>j===idx?g:v));
+
+      return (
+        <div style={{position:"fixed",inset:0,background:"rgba(17,24,39,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:55,padding:20}} onClick={onClose}>
+          <div onClick={(e)=>e.stopPropagation()} className="anim-slide" style={{width:560,maxWidth:"95vw",maxHeight:"90vh",background:"var(--bg)",borderRadius:"var(--radius-lg)",boxShadow:"var(--shadow-floating)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+            <div style={{padding:"18px 24px",borderBottom:"1px solid var(--border)",background:"var(--surface)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontSize:20,fontWeight:700}}>Split Bill</div>
+                <div style={{fontSize:13,color:"var(--text-secondary)",marginTop:2}}>Total {fmt(whole.total)} · settle each share separately</div>
+              </div>
+              <div style={{display:"flex",gap:6,background:"var(--bg-secondary)",borderRadius:10,padding:4}}>
+                {[["even","Evenly"],["item","By item"]].map(([k,lab])=>(
+                  <button key={k} onClick={()=>setMode(k)} style={{padding:"8px 16px",borderRadius:8,border:"none",cursor:"pointer",
+                    fontFamily:"var(--font-sans)",fontSize:13,fontWeight:600,
+                    background:mode===k?"var(--primary)":"transparent",color:mode===k?"#fff":"var(--text-secondary)"}}>{lab}</button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{padding:"20px 24px",overflow:"auto",flex:1}}>
+              {blocked && <div style={{background:"rgba(239,68,68,.10)",color:"var(--error)",borderRadius:8,padding:"10px 14px",fontSize:13,marginBottom:16}}>
+                A coupon is applied to this order. Remove it before splitting the bill.</div>}
+
+              {mode==="even" ? (
+                <div>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
+                    <span style={{fontSize:14,fontWeight:600}}>Number of ways</span>
+                    <div style={{display:"flex",alignItems:"center",gap:14}}>
+                      <button onClick={()=>setN((v)=>Math.max(2,v-1))} style={stepBtn}>−</button>
+                      <span style={{fontSize:22,fontWeight:800,minWidth:28,textAlign:"center"}}>{n}</span>
+                      <button onClick={()=>setN((v)=>Math.min(12,v+1))} style={stepBtn}>＋</button>
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:10}}>
+                    {parts.map((p,i)=>(
+                      <div key={i} style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,padding:"12px 14px"}}>
+                        <div style={{fontSize:12,color:"var(--text-secondary)"}}>Share {i+1}</div>
+                        <div style={{fontSize:18,fontWeight:800}}>{fmt(p.total)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+                    <span style={{fontSize:14,fontWeight:600}}>Guests</span>
+                    <div style={{display:"flex",alignItems:"center",gap:14}}>
+                      <button onClick={()=>setGuests((v)=>Math.max(2,v-1))} style={stepBtn}>−</button>
+                      <span style={{fontSize:22,fontWeight:800,minWidth:28,textAlign:"center"}}>{guests}</span>
+                      <button onClick={()=>setGuests((v)=>Math.min(8,v+1))} style={stepBtn}>＋</button>
+                    </div>
+                  </div>
+                  <div style={{fontSize:12,color:"var(--text-secondary)",marginBottom:10}}>Tap a guest number to assign each item.</div>
+                  {cart.map((it,idx)=>(
+                    <div key={it.line!=null?it.line:idx} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid var(--border)"}}>
+                      <div style={{minWidth:0,flex:1}}>
+                        <div style={{fontSize:14,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{it.qty}× {it.name}</div>
+                        <div style={{fontSize:12,color:"var(--text-tertiary)"}}>{fmt(lineGross(it))}</div>
+                      </div>
+                      <div style={{display:"flex",gap:5,flexWrap:"wrap",justifyContent:"flex-end"}}>
+                        {Array.from({length:guests},(_,g)=>g+1).map((g)=>(
+                          <button key={g} onClick={()=>setLine(idx,g)} style={{width:30,height:30,borderRadius:8,cursor:"pointer",
+                            fontFamily:"var(--font-sans)",fontSize:13,fontWeight:700,
+                            border:"1px solid "+(guestOf(idx)===g?"var(--primary)":"var(--border)"),
+                            background:guestOf(idx)===g?"var(--primary)":"var(--surface)",color:guestOf(idx)===g?"#fff":"var(--text-secondary)"}}>{g}</button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{marginTop:14,display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:10}}>
+                    {parts.map((p,i)=>(
+                      <div key={i} style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,padding:"10px 14px"}}>
+                        <div style={{fontSize:12,color:"var(--text-secondary)"}}>{p.label}</div>
+                        <div style={{fontSize:17,fontWeight:800}}>{fmt(p.total)}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {parts.length<2 && <div style={{fontSize:12,color:"var(--text-tertiary)",marginTop:12}}>Assign items to at least two guests to split.</div>}
+                </div>
+              )}
+            </div>
+
+            <div style={{padding:"14px 24px",borderTop:"1px solid var(--border)",background:"var(--surface)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{fontSize:13,color: Math.abs(sum-whole.total)<0.005?"var(--text-secondary)":"var(--error)"}}>
+                {parts.length} shares · {fmt(sum)}{Math.abs(sum-whole.total)>=0.005?(" (≠ "+fmt(whole.total)+")"):""}
+              </div>
+              <div style={{display:"flex",gap:10}}>
+                <Button variant="secondary" onClick={onClose}>Cancel</Button>
+                <Button disabled={!ready} onClick={()=>onConfirm(parts, whole)}>Charge {parts.length} shares →</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    const stepBtn = { width:36,height:36,borderRadius:10,border:"1px solid var(--border)",background:"var(--surface)",
+      cursor:"pointer",fontFamily:"var(--font-sans)",fontSize:18,fontWeight:700,color:"var(--text-primary)" };
+
     /* ───── Customer select modal ───── */
     function CustomerSelectModal({ customers, selected, onSelect, onClose }) {
       const [q, setQ] = useState("");
@@ -4183,6 +4330,7 @@ counters  (name, value)
       const [orderCustomer, setOrderCustomer] = useState(null);
       const [custModal, setCustModal] = useState(false);
       const [kot, setKot]             = useState(null);
+      const [splitOpen, setSplitOpen] = useState(false);
       const [prodEdit, setProdEdit]   = useState(null);
       const [toast, setToast]         = useState(null);
       const [sessionWarn, setSessionWarn] = useState(false);
@@ -4318,43 +4466,75 @@ counters  (name, value)
 
       // Proceed → KOT first, then payment
       const onProceed = (amt) => setKot({ items:cart, table, type:orderType, total:amt });
-      const onKotSend = () => { const amt = kot.total; setKot(null); setPay({ total:amt }); };
-
-      const onPaid = (details) => {
+      // A "charge" describes exactly what one bill collects (full order or one split share).
+      const wholeCharge = () => {
         const promoUsed = orderPromo || window.HELA_AUTOPROMO(cart, cfg);
         const T = window.HELA_TOTALS(cart, cfg, promoUsed);
-        const total     = T.total;
-        const billSeq   = window.HelaDB.counter("bill");
-        const invSeq    = window.HelaDB.counter("invoice");
-        const no         = "ORD-"+String(billSeq).padStart(5,"0");
-        const invoiceNo  = (cfg.invoicePrefix||"INV")+"-"+String(invSeq).padStart(5,"0");
-        const earned     = Math.floor(total / 2); // 1 loyalty point per $2 spent
-        const now        = new Date();
-        const cost       = cart.reduce((s,i)=>s+(i.cost!=null?i.cost:0)*i.qty,0);
+        return { items:cart, subtotal:T.subtotal, discount:T.discount, service:T.service, tax:T.tax,
+          taxRate:T.taxRate, rounding:T.roundingAdj, total:T.total, coupon:promoUsed?promoUsed.code:null,
+          autoPromo:!!(promoUsed&&promoUsed.auto), splitLabel:null, earn:true };
+      };
+      const onKotSend = () => { setKot(null); const c = wholeCharge();
+        setPay({ total:c.total, charge:c, queue:[], paidBills:[], summary:null, splitN:1 }); };
+      const startSplit = (parts, summary) => {
+        if (!parts || parts.length<2) return;
+        setSplitOpen(false);
+        const [first,...rest] = parts;
+        setPay({ total:first.total, charge:first, queue:rest, paidBills:[], summary, splitN:parts.length });
+      };
+
+      // Persist one bill for a charge + payment details. Loyalty/spend accrue only on the
+      // charge flagged `earn` (the primary share of a split); credit redemption always applies.
+      const recordBill = (charge, details) => {
+        const billSeq = window.HelaDB.counter("bill");
+        const invSeq  = window.HelaDB.counter("invoice");
+        const no        = "ORD-"+String(billSeq).padStart(5,"0");
+        const invoiceNo = (cfg.invoicePrefix||"INV")+"-"+String(invSeq).padStart(5,"0");
+        const total = charge.total;
+        const earn  = charge.earn!==false;
+        const earned = earn ? Math.floor(total/2) : 0;   // 1 loyalty point per $2 spent
+        const now = new Date();
+        const cost = (charge.items||[]).reduce((s,i)=>s+(i.cost!=null?i.cost:0)*i.qty,0);
         const sale = { no, invoiceNo, table, type:orderType, customer:orderCustomer, earned, kind:"sale",
           date:now.toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}),
           time:now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}), ts:now.getTime(),
-          items:cart, subtotal:T.subtotal, discount:T.discount, service:T.service, tax:T.tax,
-          coupon:promoUsed?promoUsed.code:null, autoPromo:promoUsed&&promoUsed.auto?true:false,
-          taxRate:T.taxRate, rounding:T.roundingAdj, total, cost:Math.round(cost*100)/100,
+          items:charge.items||[], subtotal:charge.subtotal, discount:charge.discount, service:charge.service, tax:charge.tax,
+          coupon:charge.coupon||null, autoPromo:!!charge.autoPromo, split:charge.splitLabel||null,
+          taxRate:charge.taxRate, rounding:charge.rounding||0, total, cost:Math.round(cost*100)/100,
           shiftId:shift?shift.id:null, cashier:user?user.name:"Admin", ...details };
         window.HelaDB.insert("bills", sale);
-        if (activeTab && window.HelaDB.get("tabs", activeTab)) window.HelaDB.remove("tabs", activeTab);   // tab settled
         if (orderCustomer) {
           const c = window.HelaDB.get("customers", orderCustomer.id);
           if (c) {
-            const upd = { points:(c.points||0)+earned, spent:Math.round(((c.spent||0)+total)*100)/100,
-              visits:(c.visits||0)+1, last:"Today" };
+            const upd = {};
             const used = Math.min(details.creditUsed||0, c.credit||0);   // clamp to avoid overspend
             if (used>0) upd.credit = Math.round(((c.credit||0)-used)*100)/100;
-            window.HelaDB.update("customers", c.id, upd);
+            if (earn) { upd.points=(c.points||0)+earned; upd.spent=Math.round(((c.spent||0)+total)*100)/100;
+              upd.visits=(c.visits||0)+1; upd.last="Today"; }
+            if (Object.keys(upd).length) window.HelaDB.update("customers", c.id, upd);
             if (used>0 && user) window.HelaDB.log({ user:user.username, role:user.role, action:"credit_redeem",
               detail:c.name+" · "+window.HELA_DATA.fmt(used)+" on "+invoiceNo });
           }
         }
         if (user) window.HelaDB.log({ user:user.username, role:user.role, action:"sale",
-          detail:invoiceNo+" · "+window.HELA_DATA.fmt(total)+" · "+details.method });
-        setReceipt(sale);
+          detail:invoiceNo+" · "+window.HELA_DATA.fmt(total)+" · "+details.method+(charge.splitLabel?(" · split "+charge.splitLabel):"") });
+        return sale;
+      };
+      const onPaid = (details) => {
+        const sale = recordBill(pay.charge, details);
+        const paidBills = [...(pay.paidBills||[]), sale];
+        if (pay.queue && pay.queue.length) {            // more split shares to collect
+          const [next,...rest] = pay.queue;
+          setPay({ ...pay, total:next.total, charge:next, queue:rest, paidBills });
+          return;
+        }
+        if (activeTab && window.HelaDB.get("tabs", activeTab)) window.HelaDB.remove("tabs", activeTab);   // tab settled
+        if (pay.splitN>1) {                             // show a settlement summary, not a single bill
+          setReceipt({ ...pay.summary, rounding:pay.summary.roundingAdj, invoiceNo:"SPLIT ×"+pay.splitN,
+            table, type:orderType, customer:orderCustomer, kind:"sale", items:cart,
+            cashier:user?user.name:"Admin", date:sale.date, time:sale.time,
+            splitInfo:{ parts:pay.splitN, bills:paidBills.map((b)=>({ invoiceNo:b.invoiceNo, total:b.total, method:b.method })) } });
+        } else setReceipt(sale);
         setPay(null);
       };
       const closeReceipt = (again)=>{ setReceipt(null); setCart([]); setOrderType("Dine in"); setOrderCustomer(null); setOrderPromo(null);
@@ -4481,6 +4661,7 @@ counters  (name, value)
                     setOrderType={setOrderType} held={held} onHold={onHold} onRecall={onRecall}
                     orderCustomer={orderCustomer} onPickCustomer={()=>setCustModal(true)} cfg={cfg}
                     promo={orderPromo} setPromo={setOrderPromo} onAdd={requestAdd} autoPromo={autoPromo} onSaveTab={saveTab}
+                    onSplit={()=>{ if(cart.length) setSplitOpen(true); }}
                     onVoid={onVoid} discountLimit={cfg.discountLimit==null?100:cfg.discountLimit}
                     freeDiscount={user && (user.role==="admin"||user.role==="manager")} requireManager={requireManager} />
                 : content}
@@ -4493,7 +4674,10 @@ counters  (name, value)
             onConfirm={({mods,qty,note})=>{ addLine(modPick.product,{mods,qty,note}); setModPick(null); }}
             onClose={()=>setModPick(null)} />}
           {kot     && <KOTModal order={kot} onSendAndPay={onKotSend} onClose={()=>setKot(null)} />}
-          {pay     && <PaymentModal total={pay.total} customer={orderCustomer} onClose={()=>setPay(null)} onComplete={onPaid} />}
+          {splitOpen && <SplitBillModal cart={cart} cfg={cfg} orderPromo={orderPromo} onClose={()=>setSplitOpen(false)} onConfirm={startSplit} />}
+          {pay     && <PaymentModal key={"pay"+(pay.paidBills?pay.paidBills.length:0)} total={pay.total} customer={orderCustomer}
+                        caption={pay.splitN>1 ? ("Split share "+(pay.charge.splitLabel||"")+" · "+((pay.paidBills?pay.paidBills.length:0)+1)+" of "+pay.splitN) : null}
+                        onClose={()=>setPay(null)} onComplete={onPaid} />}
           {receipt && <ReceiptModal sale={receipt} cfg={cfg} onClose={()=>closeReceipt(false)} onNewSale={()=>closeReceipt(true)} />}
           {prodEdit && <ProductEditModal product={prodEdit.id?prodEdit:null} onSave={saveProduct} onClose={()=>setProdEdit(null)} />}
           {changePw && <ChangePasswordModal user={user} onClose={()=>setChangePw(false)} onDone={()=>{ setChangePw(false); flash("Password updated"); }} />}

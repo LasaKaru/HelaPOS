@@ -16,7 +16,7 @@ operational feature set.
 | Area | What's included |
 |------|-----------------|
 | **Sales (POS)** | Category menu + image tiles, cart with per‑line qty / discount / notes, **item modifiers / variants** (size, spice level, add‑ons — priced & shown on KOT/receipt/KDS), **barcode / SKU quick‑add** (type or scan + Enter), hold & recall orders, void (manager‑approved), order types (Dine‑in / Takeaway / Delivery), table selection |
-| **Payments** | Cash (quick‑cash + change due), Card, Mobile, and **split / multi‑tender** ("Mixed"); **Kitchen Order Ticket (KOT)** before pay |
+| **Payments** | Cash (quick‑cash + change due), Card, Mobile, and **multi‑tender** ("Mixed"); **bill splitting** (evenly or by item into separate bills); **Kitchen Order Ticket (KOT)** before pay |
 | **Pricing engine** | Configurable **tax rate**, **tax‑inclusive** pricing, **service charge**, **rounding** (0.05 / 0.50 / 1), line + order discounts, **coupons** (`SAVE10`, `WELCOME5`, `VIP20`, `LUNCH15`) and **rule‑based automatic promotions** (happy hour, spend / item thresholds, weekend — best match auto‑applies, configurable in Settings) |
 | **Invoices** | Every sale is saved; searchable history, reprint, CSV export, and **refunds / returns** (partial or full, manager‑approved) |
 | **Kitchen Display (KDS)** | Live ticket board — New → Preparing → Ready → Served |
@@ -231,6 +231,7 @@ local DB). This is exactly what the Phase‑2 WPF port and/or a backend API will
 - [x] Store credit / customer accounts (top‑up, redeem at POS, refund‑to‑credit)
 - [x] Rule‑based automatic promotions (happy hour, spend / item thresholds, weekend)
 - [x] Table management — open tabs, seat / resume / **transfer** / **merge** / settle
+- [x] Bill splitting — split a check **evenly** or **by item** into separate bills, settled one share at a time
 - [ ] Multi‑store + backend sync
 
 **Phase 2 — Native WPF / .NET desktop**

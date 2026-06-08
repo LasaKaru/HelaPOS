@@ -232,7 +232,7 @@ local DB). This is exactly what the Phase‑2 WPF port and/or a backend API will
 - [x] Rule‑based automatic promotions (happy hour, spend / item thresholds, weekend)
 - [x] Table management — open tabs, seat / resume / **transfer** / **merge** / settle
 - [x] Bill splitting — split a check **evenly** or **by item** into separate bills, settled one share at a time
-- [ ] Multi‑store + backend sync
+- [ ] Multi‑store + backend sync — **[architecture spec](docs/multi-store-sync.md)** (design complete; backend not yet built)
 
 **Phase 2 — Native WPF / .NET desktop**
 - [ ] Port screens onto the original WPF design

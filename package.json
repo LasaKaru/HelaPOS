@@ -1,0 +1,9 @@
+{
+  "name": "helapos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HelaPOS — offline-first point of sale",
+  "scripts": {
+    "test": "node --test project/ui_kits/helapos/sync/*.test.js"
+  }
+}

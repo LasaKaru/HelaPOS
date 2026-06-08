@@ -7,6 +7,17 @@
 > synchronises through a central backend. It is implementation‑ready: every
 > decision is tied to a concrete hook in the current code.
 
+> **Implementation status (P0–P2 core landed):** the server‑free heart of this
+> design — ULID identity, Hybrid Logical Clocks, the order‑independent oplog
+> resolver, and the stock/credit/points ledgers — is implemented and unit‑tested
+> in [`project/ui_kits/helapos/sync/helasync.js`](../project/ui_kits/helapos/sync/helasync.js).
+> The merge simulator in
+> [`helasync.test.js`](../project/ui_kits/helapos/sync/helasync.test.js)
+> proves the CRDT order‑independence property and every worked conflict example
+> in §10 — run `npm test`. Still to do: wire the module into `HelaDB`'s mutation
+> choke point (P0 instrumentation), migrate `hela.stock.v1`/absolute balances
+> into ledgers (P2), and build the backend + sync client (P3+).
+
 ---
 
 ## 1. TL;DR
